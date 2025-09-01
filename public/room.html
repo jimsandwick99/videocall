@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Call Room</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: #1a1a2e;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .video-container {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            padding: 1rem;
+            max-height: calc(100vh - 100px);
+        }
+        
+        .video-wrapper {
+            position: relative;
+            background: #0f0f1e;
+            border-radius: 15px;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .video-label {
+            position: absolute;
+            top: 1rem;
+            left: 1rem;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 5px;
+            font-size: 0.9rem;
+        }
+        
+        .controls {
+            background: #16213e;
+            padding: 1rem;
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+        
+        .control-btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 10px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.3s;
+            color: white;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .control-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+        
+        .control-btn.primary {
+            background: #667eea;
+        }
+        
+        .control-btn.primary:hover {
+            background: #5a67d8;
+        }
+        
+        .control-btn.danger {
+            background: #e53e3e;
+        }
+        
+        .control-btn.danger:hover {
+            background: #c53030;
+        }
+        
+        .control-btn.success {
+            background: #48bb78;
+        }
+        
+        .control-btn.success:hover {
+            background: #38a169;
+        }
+        
+        .control-btn.warning {
+            background: #ed8936;
+        }
+        
+        .control-btn.warning:hover {
+            background: #dd6b20;
+        }
+        
+        .control-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .status {
+            position: fixed;
+            top: 1rem;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border-radius: 10px;
+            z-index: 1000;
+        }
+        
+        .recording-indicator {
+            display: none;
+            align-items: center;
+            gap: 0.5rem;
+            color: #e53e3e;
+            font-weight: 500;
+        }
+        
+        .recording-indicator.active {
+            display: flex;
+        }
+        
+        .recording-dot {
+            width: 10px;
+            height: 10px;
+            background: #e53e3e;
+            border-radius: 50%;
+            animation: pulse 1.5s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.3;
+            }
+        }
+        
+        .placeholder {
+            color: #666;
+            font-size: 1.2rem;
+        }
+        
+        @media (max-width: 768px) {
+            .video-container {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="status" id="status">Connecting...</div>
+    
+    <div class="video-container">
+        <div class="video-wrapper">
+            <video id="localVideo" autoplay muted playsinline></video>
+            <div class="video-label">You</div>
+        </div>
+        <div class="video-wrapper">
+            <video id="remoteVideo" autoplay playsinline></video>
+            <div class="video-label">Remote User</div>
+            <div class="placeholder" id="placeholder">Waiting for other user...</div>
+        </div>
+    </div>
+    
+    <div class="controls">
+        <button class="control-btn primary" id="toggleVideo">
+            <span>📹</span> Toggle Video
+        </button>
+        <button class="control-btn primary" id="toggleAudio">
+            <span>🎤</span> Toggle Audio
+        </button>
+        <button class="control-btn success" id="startRecording">
+            <span>⏺️</span> Start Recording
+        </button>
+        <button class="control-btn warning" id="stopRecording" style="display: none;">
+            <span>⏹️</span> Stop Recording
+        </button>
+        <button class="control-btn danger" id="endCall">
+            <span>📞</span> End Call
+        </button>
+        <div class="recording-indicator" id="recordingIndicator">
+            <div class="recording-dot"></div>
+            <span>Recording...</span>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        const roomId = window.location.pathname.split('/').pop();
+        const localVideo = document.getElementById('localVideo');
+        const remoteVideo = document.getElementById('remoteVideo');
+        const status = document.getElementById('status');
+        const placeholder = document.getElementById('placeholder');
+        
+        let localStream;
+        let remoteStream;
+        let peerConnection;
+        let mediaRecorder;
+        let recordedChunks = [];
+        
+        const configuration = {
+            iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' }
+            ]
+        };
+        
+        async function initializeMedia() {
+            try {
+                localStream = await navigator.mediaDevices.getUserMedia({
+                    video: true,
+                    audio: true
+                });
+                localVideo.srcObject = localStream;
+                status.textContent = 'Connected - Waiting for peer...';
+            } catch (error) {
+                console.error('Error accessing media devices:', error);
+                status.textContent = 'Error: Could not access camera/microphone';
+            }
+        }
+        
+        function createPeerConnection(userId) {
+            peerConnection = new RTCPeerConnection(configuration);
+            
+            localStream.getTracks().forEach(track => {
+                peerConnection.addTrack(track, localStream);
+            });
+            
+            peerConnection.ontrack = (event) => {
+                remoteVideo.srcObject = event.streams[0];
+                remoteStream = event.streams[0];
+                placeholder.style.display = 'none';
+                status.textContent = 'Connected - Call active';
+            };
+            
+            peerConnection.onicecandidate = (event) => {
+                if (event.candidate) {
+                    socket.emit('ice-candidate', event.candidate, userId);
+                }
+            };
+            
+            return peerConnection;
+        }
+        
+        async function makeOffer(userId) {
+            const pc = createPeerConnection(userId);
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+            socket.emit('offer', offer, userId);
+        }
+        
+        socket.emit('join-room', roomId);
+        
+        socket.on('other-users', async (users) => {
+            await initializeMedia();
+            if (users.length > 0) {
+                users.forEach(userId => makeOffer(userId));
+            }
+        });
+        
+        socket.on('user-joined', async (userId) => {
+            if (!localStream) {
+                await initializeMedia();
+            }
+            makeOffer(userId);
+        });
+        
+        socket.on('offer', async (offer, userId) => {
+            if (!localStream) {
+                await initializeMedia();
+            }
+            const pc = createPeerConnection(userId);
+            await pc.setRemoteDescription(offer);
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+            socket.emit('answer', answer, userId);
+        });
+        
+        socket.on('answer', async (answer) => {
+            await peerConnection.setRemoteDescription(answer);
+        });
+        
+        socket.on('ice-candidate', async (candidate) => {
+            if (peerConnection) {
+                await peerConnection.addIceCandidate(candidate);
+            }
+        });
+        
+        socket.on('user-left', () => {
+            if (remoteVideo.srcObject) {
+                remoteVideo.srcObject.getTracks().forEach(track => track.stop());
+                remoteVideo.srcObject = null;
+            }
+            placeholder.style.display = 'block';
+            status.textContent = 'User disconnected';
+        });
+        
+        document.getElementById('toggleVideo').addEventListener('click', () => {
+            const videoTrack = localStream.getVideoTracks()[0];
+            if (videoTrack) {
+                videoTrack.enabled = !videoTrack.enabled;
+                document.getElementById('toggleVideo').textContent = videoTrack.enabled ? '📹 Toggle Video' : '📷 Toggle Video';
+            }
+        });
+        
+        document.getElementById('toggleAudio').addEventListener('click', () => {
+            const audioTrack = localStream.getAudioTracks()[0];
+            if (audioTrack) {
+                audioTrack.enabled = !audioTrack.enabled;
+                document.getElementById('toggleAudio').textContent = audioTrack.enabled ? '🎤 Toggle Audio' : '🔇 Toggle Audio';
+            }
+        });
+        
+        document.getElementById('startRecording').addEventListener('click', () => {
+            recordedChunks = [];
+            const mixedStream = new MediaStream();
+            
+            if (localStream) {
+                localStream.getAudioTracks().forEach(track => mixedStream.addTrack(track));
+            }
+            
+            if (remoteStream) {
+                remoteStream.getAudioTracks().forEach(track => mixedStream.addTrack(track));
+            }
+            
+            mediaRecorder = new MediaRecorder(mixedStream);
+            
+            mediaRecorder.ondataavailable = (event) => {
+                if (event.data.size > 0) {
+                    recordedChunks.push(event.data);
+                }
+            };
+            
+            mediaRecorder.onstop = () => {
+                const blob = new Blob(recordedChunks, { type: 'audio/webm' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `recording-${Date.now()}.webm`;
+                a.click();
+            };
+            
+            mediaRecorder.start();
+            document.getElementById('startRecording').style.display = 'none';
+            document.getElementById('stopRecording').style.display = 'inline-flex';
+            document.getElementById('recordingIndicator').classList.add('active');
+        });
+        
+        document.getElementById('stopRecording').addEventListener('click', () => {
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+                document.getElementById('startRecording').style.display = 'inline-flex';
+                document.getElementById('stopRecording').style.display = 'none';
+                document.getElementById('recordingIndicator').classList.remove('active');
+            }
+        });
+        
+        document.getElementById('endCall').addEventListener('click', () => {
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
+            }
+            if (peerConnection) {
+                peerConnection.close();
+            }
+            window.location.href = '/';
+        });
+        
+        window.addEventListener('beforeunload', () => {
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
+            }
+            if (peerConnection) {
+                peerConnection.close();
+            }
+        });
+    </script>
+</body>
+</html>

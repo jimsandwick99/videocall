@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Call App</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .container {
+            background: white;
+            padding: 2rem;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            width: 90%;
+            max-width: 500px;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 2rem;
+            text-align: center;
+        }
+        
+        .button {
+            width: 100%;
+            padding: 1rem;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .button:hover {
+            background: #5a67d8;
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        .room-link {
+            margin-top: 2rem;
+            padding: 1rem;
+            background: #f7fafc;
+            border-radius: 10px;
+            display: none;
+        }
+        
+        .room-link.active {
+            display: block;
+        }
+        
+        .link-text {
+            word-break: break-all;
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 500;
+        }
+        
+        .link-text:hover {
+            text-decoration: underline;
+        }
+        
+        .copy-button {
+            margin-top: 1rem;
+            background: #48bb78;
+        }
+        
+        .copy-button:hover {
+            background: #38a169;
+        }
+        
+        .info {
+            margin-top: 1rem;
+            padding: 0.5rem;
+            background: #bee3f8;
+            border-radius: 5px;
+            color: #2c5282;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Video Call Prototype</h1>
+        <button class="button" id="createRoom">Create Video Call Room</button>
+        
+        <div class="room-link" id="roomLinkContainer">
+            <p style="margin-bottom: 0.5rem; color: #666;">Share this link to invite someone:</p>
+            <a href="#" class="link-text" id="roomLink" target="_blank"></a>
+            <button class="button copy-button" id="copyLink">Copy Link</button>
+            <div class="info">
+                Click the link to join the call yourself, or share it with others.
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const createRoomBtn = document.getElementById('createRoom');
+        const roomLinkContainer = document.getElementById('roomLinkContainer');
+        const roomLink = document.getElementById('roomLink');
+        const copyLinkBtn = document.getElementById('copyLink');
+
+        createRoomBtn.addEventListener('click', async () => {
+            try {
+                const response = await fetch('/create-room', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                roomLink.href = data.url;
+                roomLink.textContent = data.url;
+                roomLinkContainer.classList.add('active');
+                
+                createRoomBtn.textContent = 'Create Another Room';
+            } catch (error) {
+                console.error('Error creating room:', error);
+                alert('Failed to create room. Please try again.');
+            }
+        });
+
+        copyLinkBtn.addEventListener('click', () => {
+            navigator.clipboard.writeText(roomLink.href).then(() => {
+                copyLinkBtn.textContent = 'Copied!';
+                setTimeout(() => {
+                    copyLinkBtn.textContent = 'Copy Link';
+                }, 2000);
+            }).catch(err => {
+                console.error('Failed to copy:', err);
+            });
+        });
+    </script>
+</body>
+</html>
