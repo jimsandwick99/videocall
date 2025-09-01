@@ -127,9 +127,14 @@
                 });
                 
                 const data = await response.json();
-                roomLink.href = data.url;
-                roomLink.textContent = data.url;
+                // Add creator parameter for the interviewer
+                const creatorUrl = `${data.url}?creator=true`;
+                roomLink.href = creatorUrl;
+                roomLink.textContent = creatorUrl;
                 roomLinkContainer.classList.add('active');
+                
+                // Mark this user as the room creator (interviewer)
+                sessionStorage.setItem(`room_creator_${data.roomId}`, 'true');
                 
                 createRoomBtn.textContent = 'Create Another Room';
             } catch (error) {

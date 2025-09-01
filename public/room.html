@@ -229,21 +229,21 @@
     <div class="video-container">
         <div class="video-wrapper">
             <video id="localVideo" autoplay muted playsinline></video>
-            <div class="video-label">You</div>
+            <div class="video-label" id="localLabel">You</div>
         </div>
         <div class="video-wrapper">
             <video id="remoteVideo" autoplay playsinline></video>
-            <div class="video-label">Remote User</div>
+            <div class="video-label" id="remoteLabel">Remote User</div>
             <div class="placeholder" id="placeholder">Waiting for other user...</div>
         </div>
     </div>
     
     <div class="controls">
         <button class="control-btn primary" id="toggleVideo">
-            <span>📹</span> Toggle Video
+            <span>📹</span> Turn Off Video
         </button>
         <button class="control-btn primary" id="toggleAudio">
-            <span>🎤</span> Toggle Audio
+            <span>🎤</span> Mute Audio
         </button>
         <button class="control-btn success" id="startRecording">
             <span>⏺️</span> Start Recording
@@ -262,7 +262,12 @@
 
     <script src="/socket.io/socket.io.js"></script>
     <script>
-        const socket = io();
+        // Configure Socket.IO for ngrok
+        const socketOptions = {};
+        if (window.location.hostname.includes('ngrok')) {
+            socketOptions.transports = ['websocket', 'polling'];
+        }
+        const socket = io(socketOptions);
         const roomId = window.location.pathname.split('/').pop();
         const localVideo = document.getElementById('localVideo');
         const remoteVideo = document.getElementById('remoteVideo');
@@ -278,6 +283,38 @@
         let ignoreOffer = false;
         let isSettingRemoteAnswerPending = false;
         let pendingCandidates = [];
+        
+        // Progressive recording variables
+        let localAudioRecorder;
+        let remoteAudioRecorder;
+        let chunkIndex = 0;
+        let recordingStartTime;
+        let isProgressiveRecording = false;
+        
+        // Check if this user is the interviewer (room creator)
+        // Check URL parameter first, then session storage
+        const urlParams = new URLSearchParams(window.location.search);
+        const isCreator = urlParams.get('creator') === 'true';
+        const isInterviewer = isCreator || sessionStorage.getItem(`room_creator_${roomId}`) === 'true';
+        
+        // Store in session if creator
+        if (isCreator) {
+            sessionStorage.setItem(`room_creator_${roomId}`, 'true');
+        }
+        
+        // Update labels and hide recording controls based on role
+        if (!isInterviewer) {
+            document.getElementById('startRecording').style.display = 'none';
+            document.getElementById('stopRecording').style.display = 'none';
+            document.getElementById('recordingIndicator').style.display = 'none';
+            document.getElementById('localLabel').textContent = 'You (Interviewee)';
+            document.getElementById('remoteLabel').textContent = 'Interviewer';
+            console.log('You are the interviewee - recording controls hidden');
+        } else {
+            document.getElementById('localLabel').textContent = 'You (Interviewer)';
+            document.getElementById('remoteLabel').textContent = 'Interviewee';
+            console.log('You are the interviewer - recording controls available');
+        }
         
         const configuration = {
             iceServers: [
@@ -313,6 +350,9 @@
                     audio: true
                 });
                 localVideo.srcObject = localStream;
+                // Ensure local video is muted to prevent echo
+                localVideo.muted = true;
+                localVideo.volume = 0;
                 status.textContent = 'Connected - Waiting for peer...';
             } catch (error) {
                 console.error('Error accessing media devices:', error);
@@ -342,6 +382,12 @@
                     remoteStream = event.streams[0];
                     placeholder.style.display = 'none';
                     status.textContent = 'Connected - Call active';
+                    
+                    // Auto-start recording when both streams are available
+                    // Uncomment this to automatically start recording
+                    // if (localStream && remoteStream && !isProgressiveRecording) {
+                    //     setTimeout(() => startProgressiveRecording(), 1000);
+                    // }
                 } else {
                     console.error('No streams in track event');
                 }
@@ -528,63 +574,65 @@
         });
         
         document.getElementById('toggleVideo').addEventListener('click', () => {
-            const videoTrack = localStream.getVideoTracks()[0];
-            if (videoTrack) {
-                videoTrack.enabled = !videoTrack.enabled;
-                document.getElementById('toggleVideo').textContent = videoTrack.enabled ? '📹 Toggle Video' : '📷 Toggle Video';
+            if (!localStream) {
+                console.log('No local stream available');
+                return;
+            }
+            
+            const videoTracks = localStream.getVideoTracks();
+            if (videoTracks.length > 0) {
+                const videoTrack = videoTracks[0];
+                const isEnabled = videoTrack.enabled;
+                videoTrack.enabled = !isEnabled;
+                
+                const button = document.getElementById('toggleVideo');
+                if (!videoTrack.enabled) {
+                    button.innerHTML = '<span>📷</span> Turn On Video';
+                    button.style.background = '#e53e3e'; // Red when off
+                    console.log('Camera turned off');
+                } else {
+                    button.innerHTML = '<span>📹</span> Turn Off Video';
+                    button.style.background = '#667eea'; // Original color when on
+                    console.log('Camera turned on');
+                }
+            } else {
+                console.log('No video tracks found');
             }
         });
         
         document.getElementById('toggleAudio').addEventListener('click', () => {
-            const audioTrack = localStream.getAudioTracks()[0];
-            if (audioTrack) {
-                audioTrack.enabled = !audioTrack.enabled;
-                document.getElementById('toggleAudio').textContent = audioTrack.enabled ? '🎤 Toggle Audio' : '🔇 Toggle Audio';
+            if (!localStream) {
+                console.log('No local stream available');
+                return;
+            }
+            
+            const audioTracks = localStream.getAudioTracks();
+            if (audioTracks.length > 0) {
+                const audioTrack = audioTracks[0];
+                const isEnabled = audioTrack.enabled;
+                audioTrack.enabled = !isEnabled;
+                
+                const button = document.getElementById('toggleAudio');
+                if (!audioTrack.enabled) {
+                    button.innerHTML = '<span>🔇</span> Unmute Audio';
+                    button.style.background = '#e53e3e'; // Red when muted
+                    console.log('Microphone muted');
+                } else {
+                    button.innerHTML = '<span>🎤</span> Mute Audio';
+                    button.style.background = '#667eea'; // Original color when active
+                    console.log('Microphone unmuted');
+                }
+            } else {
+                console.log('No audio tracks found');
             }
         });
         
         document.getElementById('startRecording').addEventListener('click', () => {
-            recordedChunks = [];
-            const mixedStream = new MediaStream();
-            
-            if (localStream) {
-                localStream.getAudioTracks().forEach(track => mixedStream.addTrack(track));
-            }
-            
-            if (remoteStream) {
-                remoteStream.getAudioTracks().forEach(track => mixedStream.addTrack(track));
-            }
-            
-            mediaRecorder = new MediaRecorder(mixedStream);
-            
-            mediaRecorder.ondataavailable = (event) => {
-                if (event.data.size > 0) {
-                    recordedChunks.push(event.data);
-                }
-            };
-            
-            mediaRecorder.onstop = () => {
-                const blob = new Blob(recordedChunks, { type: 'audio/webm' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `recording-${Date.now()}.webm`;
-                a.click();
-            };
-            
-            mediaRecorder.start();
-            document.getElementById('startRecording').style.display = 'none';
-            document.getElementById('stopRecording').style.display = 'inline-flex';
-            document.getElementById('recordingIndicator').classList.add('active');
+            startProgressiveRecording();
         });
         
         document.getElementById('stopRecording').addEventListener('click', () => {
-            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-                mediaRecorder.stop();
-                document.getElementById('startRecording').style.display = 'inline-flex';
-                document.getElementById('stopRecording').style.display = 'none';
-                document.getElementById('recordingIndicator').classList.remove('active');
-            }
+            stopProgressiveRecording();
         });
         
         document.getElementById('endCall').addEventListener('click', () => {
@@ -597,7 +645,172 @@
             window.location.href = '/';
         });
         
-        window.addEventListener('beforeunload', () => {
+        // Progressive recording functions
+        function startProgressiveRecording() {
+            if (!localStream) {
+                console.error('Cannot start recording: No local stream available');
+                alert('Please allow camera/microphone access first');
+                return;
+            }
+            
+            if (!remoteStream) {
+                console.warn('Warning: No remote stream yet, but starting recording with local stream only');
+                // Continue anyway - we can still record the local side
+            }
+            
+            isProgressiveRecording = true;
+            recordingStartTime = Date.now();
+            chunkIndex = 0;
+            
+            // Record local audio only
+            const localAudioStream = new MediaStream();
+            localStream.getAudioTracks().forEach(track => localAudioStream.addTrack(track));
+            
+            // Record remote audio only if available
+            const remoteAudioStream = new MediaStream();
+            if (remoteStream) {
+                remoteStream.getAudioTracks().forEach(track => remoteAudioStream.addTrack(track));
+            }
+            
+            // Start local audio recorder
+            if (localAudioStream.getAudioTracks().length > 0) {
+                localAudioRecorder = new MediaRecorder(localAudioStream, {
+                    mimeType: 'audio/webm;codecs=opus',
+                    audioBitsPerSecond: 128000
+                });
+                
+                localAudioRecorder.ondataavailable = (event) => {
+                    if (event.data.size > 0) {
+                        uploadChunk(event.data, 'local', chunkIndex);
+                    }
+                };
+                
+                localAudioRecorder.start(30000); // 30 second chunks
+                console.log('Started recording local audio');
+            }
+            
+            // Start remote audio recorder
+            if (remoteAudioStream.getAudioTracks().length > 0) {
+                remoteAudioRecorder = new MediaRecorder(remoteAudioStream, {
+                    mimeType: 'audio/webm;codecs=opus',
+                    audioBitsPerSecond: 128000
+                });
+                
+                remoteAudioRecorder.ondataavailable = (event) => {
+                    if (event.data.size > 0) {
+                        uploadChunk(event.data, 'remote', chunkIndex);
+                    }
+                };
+                
+                remoteAudioRecorder.start(30000); // 30 second chunks
+                console.log('Started recording remote audio');
+            }
+            
+            // Increment chunk index every 30 seconds
+            setInterval(() => {
+                if (isProgressiveRecording) {
+                    chunkIndex++;
+                }
+            }, 30000);
+            
+            // Update UI
+            document.getElementById('startRecording').style.display = 'none';
+            document.getElementById('stopRecording').style.display = 'inline-flex';
+            document.getElementById('recordingIndicator').classList.add('active');
+            
+            console.log('🔴 RECORDING STARTED - Chunks will upload every 30 seconds');
+            console.log(`Room ID: ${roomId}`);
+            console.log(`Local audio: ${localAudioRecorder ? 'Recording' : 'Not recording'}`);
+            console.log(`Remote audio: ${remoteAudioRecorder ? 'Recording' : 'Not recording'}`);
+        }
+        
+        function stopProgressiveRecording() {
+            isProgressiveRecording = false;
+            
+            if (localAudioRecorder && localAudioRecorder.state !== 'inactive') {
+                localAudioRecorder.stop();
+            }
+            
+            if (remoteAudioRecorder && remoteAudioRecorder.state !== 'inactive') {
+                remoteAudioRecorder.stop();
+            }
+            
+            // Notify server that recording is complete
+            fetch('/api/recording-complete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    roomId: roomId,
+                    totalChunks: chunkIndex + 1,
+                    duration: Date.now() - recordingStartTime
+                })
+            });
+            
+            // Update UI
+            document.getElementById('startRecording').style.display = 'inline-flex';
+            document.getElementById('stopRecording').style.display = 'none';
+            document.getElementById('recordingIndicator').classList.remove('active');
+            
+            console.log('Stopped progressive recording');
+        }
+        
+        async function uploadChunk(blob, streamType, index) {
+            console.log(`📤 Uploading ${streamType} chunk ${index}, size: ${blob.size} bytes`);
+            
+            const formData = new FormData();
+            formData.append('audio', blob, `${streamType}_chunk_${index}.webm`);
+            formData.append('roomId', roomId);
+            formData.append('streamType', streamType);
+            formData.append('chunkIndex', index);
+            formData.append('timestamp', Date.now());
+            
+            try {
+                // Try regular fetch first
+                const response = await fetch('/api/upload-chunk', {
+                    method: 'POST',
+                    body: formData,
+                    keepalive: true
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    console.log(`✅ Uploaded ${streamType} chunk ${index} successfully`);
+                } else {
+                    const error = await response.text();
+                    console.error(`❌ Failed to upload ${streamType} chunk ${index}: ${error}`);
+                }
+            } catch (error) {
+                console.error(`❌ Failed to upload ${streamType} chunk ${index}:`, error);
+                // Try sendBeacon as fallback
+                if (navigator.sendBeacon) {
+                    console.log('Trying sendBeacon fallback...');
+                    navigator.sendBeacon('/api/upload-chunk', formData);
+                }
+            }
+        }
+        
+        window.addEventListener('beforeunload', (e) => {
+            // Emergency upload of any remaining data
+            if (isProgressiveRecording) {
+                // Force stop recorders to get final chunks
+                if (localAudioRecorder && localAudioRecorder.state === 'recording') {
+                    localAudioRecorder.stop();
+                }
+                if (remoteAudioRecorder && remoteAudioRecorder.state === 'recording') {
+                    remoteAudioRecorder.stop();
+                }
+                
+                // Notify server of abrupt end
+                const formData = new FormData();
+                formData.append('roomId', roomId);
+                formData.append('abruptEnd', 'true');
+                formData.append('lastChunk', chunkIndex);
+                
+                if (navigator.sendBeacon) {
+                    navigator.sendBeacon('/api/recording-abort', formData);
+                }
+            }
+            
             if (localStream) {
                 localStream.getTracks().forEach(track => track.stop());
             }

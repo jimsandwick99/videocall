@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recording System Test</title>
+    <style>
+        body {
+            font-family: monospace;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 10px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        .success { color: green; }
+        .error { color: red; }
+        .log {
+            background: #f0f0f0;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            white-space: pre-wrap;
+        }
+        #status {
+            padding: 20px;
+            background: #333;
+            color: white;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧪 Recording System Test</h1>
+    
+    <div id="status">Ready to test...</div>
+    
+    <div>
+        <button onclick="testRecording()">Test Full Recording Flow</button>
+        <button onclick="testSingleChunk()">Test Single Chunk Upload</button>
+        <button onclick="clearLogs()">Clear Logs</button>
+    </div>
+    
+    <div id="logs"></div>
+    
+    <script>
+        const roomId = 'test-' + Date.now();
+        let chunkIndex = 0;
+        
+        function log(message, type = 'info') {
+            const logs = document.getElementById('logs');
+            const logEntry = document.createElement('div');
+            logEntry.className = `log ${type}`;
+            logEntry.textContent = `[${new Date().toTimeString().split(' ')[0]}] ${message}`;
+            logs.appendChild(logEntry);
+        }
+        
+        function updateStatus(message) {
+            document.getElementById('status').textContent = message;
+        }
+        
+        async function createTestAudioBlob() {
+            // Create a simple audio blob for testing
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const oscillator = audioContext.createOscillator();
+            const dest = audioContext.createMediaStreamDestination();
+            oscillator.connect(dest);
+            oscillator.start();
+            
+            const mediaRecorder = new MediaRecorder(dest.stream, {
+                mimeType: 'audio/webm;codecs=opus'
+            });
+            
+            return new Promise((resolve) => {
+                const chunks = [];
+                mediaRecorder.ondataavailable = (e) => chunks.push(e.data);
+                mediaRecorder.onstop = () => {
+                    oscillator.stop();
+                    audioContext.close();
+                    resolve(new Blob(chunks, { type: 'audio/webm' }));
+                };
+                
+                mediaRecorder.start();
+                setTimeout(() => mediaRecorder.stop(), 100); // Record for 100ms
+            });
+        }
+        
+        async function uploadChunk(streamType, index) {
+            log(`Uploading ${streamType} chunk ${index}...`);
+            
+            try {
+                const audioBlob = await createTestAudioBlob();
+                
+                const formData = new FormData();
+                formData.append('audio', audioBlob, `${streamType}_test_${index}.webm`);
+                formData.append('roomId', roomId);
+                formData.append('streamType', streamType);
+                formData.append('chunkIndex', index);
+                formData.append('timestamp', Date.now());
+                
+                const response = await fetch('/api/upload-chunk', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    log(`✅ ${streamType} chunk ${index} uploaded successfully`, 'success');
+                    log(`Response: ${JSON.stringify(result)}`);
+                } else {
+                    log(`❌ Failed to upload ${streamType} chunk ${index}: ${result.error}`, 'error');
+                }
+                
+                return response.ok;
+            } catch (error) {
+                log(`❌ Error uploading chunk: ${error.message}`, 'error');
+                return false;
+            }
+        }
+        
+        async function testSingleChunk() {
+            updateStatus('Testing single chunk upload...');
+            await uploadChunk('local', chunkIndex++);
+        }
+        
+        async function testRecording() {
+            updateStatus(`Testing full recording flow for room: ${roomId}`);
+            log(`Starting test for room ID: ${roomId}`);
+            
+            // Upload multiple chunks
+            log('Phase 1: Uploading chunks...');
+            await uploadChunk('local', 0);
+            await uploadChunk('remote', 0);
+            
+            // Simulate 30 seconds later
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            await uploadChunk('local', 1);
+            await uploadChunk('remote', 1);
+            
+            // Mark recording as complete
+            log('Phase 2: Marking recording as complete...');
+            
+            try {
+                const response = await fetch('/api/recording-complete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        roomId: roomId,
+                        totalChunks: 4,
+                        duration: 60000
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    log('✅ Recording marked as complete', 'success');
+                    log(`Response: ${JSON.stringify(result)}`);
+                    updateStatus('Test completed successfully! Check server logs and recordings folder.');
+                } else {
+                    log(`❌ Failed to mark recording complete: ${result.error}`, 'error');
+                    updateStatus('Test failed - see logs');
+                }
+            } catch (error) {
+                log(`❌ Error completing recording: ${error.message}`, 'error');
+                updateStatus('Test failed - see logs');
+            }
+        }
+        
+        function clearLogs() {
+            document.getElementById('logs').innerHTML = '';
+            updateStatus('Logs cleared');
+        }
+        
+        // Initial log
+        log('Test page loaded. Click "Test Full Recording Flow" to begin.');
+    </script>
+</body>
+</html>
