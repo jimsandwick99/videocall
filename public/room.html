@@ -26,7 +26,8 @@
             grid-template-columns: 1fr 1fr;
             gap: 1rem;
             padding: 1rem;
-            max-height: calc(100vh - 100px);
+            height: calc(100vh - 120px);
+            overflow: hidden;
         }
         
         .video-wrapper {
@@ -37,13 +38,14 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            min-height: 300px;
+            max-height: 100%;
+            height: 100%;
         }
         
         video {
             width: 100%;
             height: 100%;
-            object-fit: cover;
+            object-fit: contain;
             display: block;
         }
         
@@ -65,6 +67,9 @@
             justify-content: center;
             gap: 1rem;
             flex-wrap: wrap;
+            flex-shrink: 0;
+            min-height: 80px;
+            max-height: 120px;
         }
         
         .control-btn {
@@ -171,6 +176,49 @@
         @media (max-width: 768px) {
             .video-container {
                 grid-template-columns: 1fr;
+                height: calc(100vh - 140px);
+            }
+        }
+        
+        @media (max-height: 700px) {
+            .video-container {
+                height: calc(100vh - 100px);
+            }
+            
+            .control-btn {
+                padding: 0.5rem 1rem;
+                font-size: 0.9rem;
+            }
+            
+            .controls {
+                padding: 0.75rem;
+                gap: 0.75rem;
+                min-height: 60px;
+                max-height: 100px;
+            }
+        }
+        
+        @media (max-height: 500px) {
+            .video-container {
+                grid-template-columns: 1fr 1fr;
+                height: calc(100vh - 80px);
+            }
+            
+            .control-btn {
+                padding: 0.4rem 0.8rem;
+                font-size: 0.85rem;
+            }
+            
+            .controls {
+                padding: 0.5rem;
+                gap: 0.5rem;
+                min-height: 50px;
+                max-height: 80px;
+            }
+            
+            .status {
+                font-size: 0.9rem;
+                padding: 0.5rem 1rem;
             }
         }
     </style>
