@@ -273,18 +273,30 @@
         }
         
         function createPeerConnection(userId) {
+            console.log('Creating peer connection for:', userId);
             peerConnection = new RTCPeerConnection(configuration);
             
-            localStream.getTracks().forEach(track => {
-                peerConnection.addTrack(track, localStream);
-            });
+            if (localStream) {
+                localStream.getTracks().forEach(track => {
+                    console.log('Adding track to peer connection:', track.kind);
+                    peerConnection.addTrack(track, localStream);
+                });
+            } else {
+                console.error('No local stream available when creating peer connection');
+            }
             
             peerConnection.ontrack = (event) => {
-                console.log('Received remote stream:', event.streams[0]);
-                remoteVideo.srcObject = event.streams[0];
-                remoteStream = event.streams[0];
-                placeholder.style.display = 'none';
-                status.textContent = 'Connected - Call active';
+                console.log('Received remote track:', event.track.kind);
+                console.log('Remote streams:', event.streams.length);
+                if (event.streams && event.streams[0]) {
+                    console.log('Setting remote video stream');
+                    remoteVideo.srcObject = event.streams[0];
+                    remoteStream = event.streams[0];
+                    placeholder.style.display = 'none';
+                    status.textContent = 'Connected - Call active';
+                } else {
+                    console.error('No streams in track event');
+                }
             };
             
             peerConnection.onicecandidate = (event) => {
@@ -323,9 +335,12 @@
         
         async function makeOffer(userId) {
             try {
+                console.log('Making offer to:', userId);
                 makingOffer = true;
                 const pc = createPeerConnection(userId);
-                await pc.setLocalDescription();
+                const offer = await pc.createOffer();
+                await pc.setLocalDescription(offer);
+                console.log('Sending offer to:', userId);
                 socket.emit('offer', pc.localDescription, userId);
             } catch (err) {
                 console.error('Error making offer:', err);
@@ -354,12 +369,14 @@
                 await initializeMedia();
             }
             // Add a small delay to avoid simultaneous offers
-            setTimeout(() => makeOffer(userId), 100);
+            setTimeout(() => makeOffer(userId), 500);
         });
         
         socket.on('offer', async (offer, userId) => {
             try {
+                console.log('Received offer from:', userId);
                 if (!localStream) {
+                    console.log('Initializing media before answering');
                     await initializeMedia();
                 }
                 
@@ -368,6 +385,7 @@
                 
                 ignoreOffer = offerCollision;
                 if (ignoreOffer) {
+                    console.log('Ignoring offer due to collision');
                     return;
                 }
                 
@@ -376,7 +394,9 @@
                 }
                 
                 await peerConnection.setRemoteDescription(offer);
-                await peerConnection.setLocalDescription();
+                const answer = await peerConnection.createAnswer();
+                await peerConnection.setLocalDescription(answer);
+                console.log('Sending answer to:', userId);
                 socket.emit('answer', peerConnection.localDescription, userId);
                 
                 // Process any pending ICE candidates
@@ -393,15 +413,17 @@
         
         socket.on('answer', async (answer) => {
             try {
+                console.log('Received answer, signaling state:', peerConnection?.signalingState);
                 const readyForAnswer = !makingOffer && 
                                       (peerConnection?.signalingState === 'have-local-offer' || 
                                        isSettingRemoteAnswerPending);
                 if (!readyForAnswer) {
-                    console.log('Not ready for answer, ignoring');
+                    console.log('Not ready for answer, ignoring. State:', peerConnection?.signalingState);
                     return;
                 }
                 
                 isSettingRemoteAnswerPending = true;
+                console.log('Setting remote description (answer)');
                 await peerConnection.setRemoteDescription(answer);
                 
                 // Process any pending ICE candidates
