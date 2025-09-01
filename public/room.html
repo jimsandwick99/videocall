@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Video Call Room</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='80' font-size='80'>📹</text></svg>">
     <style>
         * {
             margin: 0;
@@ -36,12 +37,14 @@
             display: flex;
             align-items: center;
             justify-content: center;
+            min-height: 300px;
         }
         
         video {
             width: 100%;
             height: 100%;
             object-fit: cover;
+            display: block;
         }
         
         .video-label {
@@ -226,6 +229,7 @@
         let makingOffer = false;
         let ignoreOffer = false;
         let isSettingRemoteAnswerPending = false;
+        let pendingCandidates = [];
         
         const configuration = {
             iceServers: [
@@ -369,6 +373,14 @@
                 await peerConnection.setRemoteDescription(offer);
                 await peerConnection.setLocalDescription();
                 socket.emit('answer', peerConnection.localDescription, userId);
+                
+                // Process any pending ICE candidates
+                if (pendingCandidates.length > 0) {
+                    for (const candidate of pendingCandidates) {
+                        await peerConnection.addIceCandidate(candidate);
+                    }
+                    pendingCandidates = [];
+                }
             } catch (err) {
                 console.error('Error handling offer:', err);
             }
@@ -386,6 +398,14 @@
                 
                 isSettingRemoteAnswerPending = true;
                 await peerConnection.setRemoteDescription(answer);
+                
+                // Process any pending ICE candidates
+                if (pendingCandidates.length > 0) {
+                    for (const candidate of pendingCandidates) {
+                        await peerConnection.addIceCandidate(candidate);
+                    }
+                    pendingCandidates = [];
+                }
             } catch (err) {
                 console.error('Error handling answer:', err);
             } finally {
@@ -394,8 +414,28 @@
         });
         
         socket.on('ice-candidate', async (candidate) => {
-            if (peerConnection) {
+            try {
+                if (!peerConnection) {
+                    pendingCandidates.push(candidate);
+                    return;
+                }
+                
+                if (!peerConnection.remoteDescription) {
+                    pendingCandidates.push(candidate);
+                    return;
+                }
+                
                 await peerConnection.addIceCandidate(candidate);
+                
+                // Process any pending candidates
+                if (pendingCandidates.length > 0) {
+                    for (const pendingCandidate of pendingCandidates) {
+                        await peerConnection.addIceCandidate(pendingCandidate);
+                    }
+                    pendingCandidates = [];
+                }
+            } catch (err) {
+                console.error('Error adding ICE candidate:', err);
             }
         });
         
