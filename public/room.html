@@ -356,20 +356,23 @@
             console.log('Other users in room:', users);
             await initializeMedia();
             if (users.length > 0) {
-                console.log('Making offers to other users');
-                users.forEach(userId => makeOffer(userId));
+                console.log('I am the new user, making offers to existing users');
+                // New user makes offers to existing users
+                users.forEach(userId => {
+                    setTimeout(() => makeOffer(userId), 100);
+                });
             } else {
-                console.log('No other users in room yet');
+                console.log('I am the first user in the room');
             }
         });
         
         socket.on('user-joined', async (userId) => {
-            console.log('User joined:', userId);
+            console.log('New user joined:', userId);
             if (!localStream) {
                 await initializeMedia();
             }
-            // Add a small delay to avoid simultaneous offers
-            setTimeout(() => makeOffer(userId), 500);
+            // Existing users don't make offers, they wait for the new user to offer
+            console.log('Waiting for offer from new user:', userId);
         });
         
         socket.on('offer', async (offer, userId) => {
@@ -380,14 +383,15 @@
                     await initializeMedia();
                 }
                 
-                const offerCollision = (offer.type === 'offer') && 
-                                     (makingOffer || peerConnection?.signalingState !== 'stable');
+                // Remove collision detection - we now control who makes offers
+                // const offerCollision = (offer.type === 'offer') && 
+                //                      (makingOffer || peerConnection?.signalingState !== 'stable');
                 
-                ignoreOffer = offerCollision;
-                if (ignoreOffer) {
-                    console.log('Ignoring offer due to collision');
-                    return;
-                }
+                // ignoreOffer = offerCollision;
+                // if (ignoreOffer) {
+                //     console.log('Ignoring offer due to collision');
+                //     return;
+                // }
                 
                 if (!peerConnection) {
                     peerConnection = createPeerConnection(userId);
