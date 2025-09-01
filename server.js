@@ -37,24 +37,33 @@ app.get('/room/:roomId', (req, res) => {
 
 io.on('connection', (socket) => {
   console.log('User connected:', socket.id);
+  let currentRoom = null;
 
-  socket.on('join-room', (roomId) => {
+  socket.on('join-room', async (roomId) => {
+    console.log(`User ${socket.id} joining room ${roomId}`);
+    currentRoom = roomId;
     socket.join(roomId);
     
-    const room = rooms.get(roomId) || { users: [] };
-    room.users.push(socket.id);
-    rooms.set(roomId, room);
+    // Get all clients in the room using Socket.IO's adapter
+    const clientsInRoom = await io.in(roomId).allSockets();
+    const otherUsers = Array.from(clientsInRoom).filter(id => id !== socket.id);
     
-    const otherUsers = room.users.filter(id => id !== socket.id);
+    console.log(`Room ${roomId} now has ${clientsInRoom.size} users`);
+    console.log(`Other users in room: ${otherUsers.join(', ')}`);
+    
+    // Send the list of other users to the newly joined client
     socket.emit('other-users', otherUsers);
     
+    // Notify other users in the room that someone joined
     socket.to(roomId).emit('user-joined', socket.id);
     
     socket.on('offer', (offer, to) => {
+      console.log(`Relaying offer from ${socket.id} to ${to}`);
       io.to(to).emit('offer', offer, socket.id);
     });
     
     socket.on('answer', (answer, to) => {
+      console.log(`Relaying answer from ${socket.id} to ${to}`);
       io.to(to).emit('answer', answer, socket.id);
     });
     
@@ -63,14 +72,10 @@ io.on('connection', (socket) => {
     });
     
     socket.on('disconnect', () => {
-      console.log('User disconnected:', socket.id);
-      room.users = room.users.filter(id => id !== socket.id);
-      if (room.users.length === 0) {
-        rooms.delete(roomId);
-      } else {
-        rooms.set(roomId, room);
+      console.log(`User disconnected: ${socket.id} from room ${currentRoom}`);
+      if (currentRoom) {
+        socket.to(currentRoom).emit('user-left', socket.id);
       }
-      socket.to(roomId).emit('user-left', socket.id);
     });
   });
 });

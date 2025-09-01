@@ -335,11 +335,16 @@
         }
         
         socket.emit('join-room', roomId);
+        console.log('Joining room:', roomId);
         
         socket.on('other-users', async (users) => {
+            console.log('Other users in room:', users);
             await initializeMedia();
             if (users.length > 0) {
+                console.log('Making offers to other users');
                 users.forEach(userId => makeOffer(userId));
+            } else {
+                console.log('No other users in room yet');
             }
         });
         
