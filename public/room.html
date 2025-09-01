@@ -223,6 +223,9 @@
         let peerConnection;
         let mediaRecorder;
         let recordedChunks = [];
+        let makingOffer = false;
+        let ignoreOffer = false;
+        let isSettingRemoteAnswerPending = false;
         
         const configuration = {
             iceServers: [
@@ -315,10 +318,16 @@
         }
         
         async function makeOffer(userId) {
-            const pc = createPeerConnection(userId);
-            const offer = await pc.createOffer();
-            await pc.setLocalDescription(offer);
-            socket.emit('offer', offer, userId);
+            try {
+                makingOffer = true;
+                const pc = createPeerConnection(userId);
+                await pc.setLocalDescription();
+                socket.emit('offer', pc.localDescription, userId);
+            } catch (err) {
+                console.error('Error making offer:', err);
+            } finally {
+                makingOffer = false;
+            }
         }
         
         socket.emit('join-room', roomId);
@@ -331,25 +340,57 @@
         });
         
         socket.on('user-joined', async (userId) => {
+            console.log('User joined:', userId);
             if (!localStream) {
                 await initializeMedia();
             }
-            makeOffer(userId);
+            // Add a small delay to avoid simultaneous offers
+            setTimeout(() => makeOffer(userId), 100);
         });
         
         socket.on('offer', async (offer, userId) => {
-            if (!localStream) {
-                await initializeMedia();
+            try {
+                if (!localStream) {
+                    await initializeMedia();
+                }
+                
+                const offerCollision = (offer.type === 'offer') && 
+                                     (makingOffer || peerConnection?.signalingState !== 'stable');
+                
+                ignoreOffer = offerCollision;
+                if (ignoreOffer) {
+                    return;
+                }
+                
+                if (!peerConnection) {
+                    peerConnection = createPeerConnection(userId);
+                }
+                
+                await peerConnection.setRemoteDescription(offer);
+                await peerConnection.setLocalDescription();
+                socket.emit('answer', peerConnection.localDescription, userId);
+            } catch (err) {
+                console.error('Error handling offer:', err);
             }
-            const pc = createPeerConnection(userId);
-            await pc.setRemoteDescription(offer);
-            const answer = await pc.createAnswer();
-            await pc.setLocalDescription(answer);
-            socket.emit('answer', answer, userId);
         });
         
         socket.on('answer', async (answer) => {
-            await peerConnection.setRemoteDescription(answer);
+            try {
+                const readyForAnswer = !makingOffer && 
+                                      (peerConnection?.signalingState === 'have-local-offer' || 
+                                       isSettingRemoteAnswerPending);
+                if (!readyForAnswer) {
+                    console.log('Not ready for answer, ignoring');
+                    return;
+                }
+                
+                isSettingRemoteAnswerPending = true;
+                await peerConnection.setRemoteDescription(answer);
+            } catch (err) {
+                console.error('Error handling answer:', err);
+            } finally {
+                isSettingRemoteAnswerPending = false;
+            }
         });
         
         socket.on('ice-candidate', async (candidate) => {
