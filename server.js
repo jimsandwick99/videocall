@@ -10,6 +10,9 @@ const OpenAI = require('openai');
 // Load environment variables
 require('dotenv').config();
 
+// Import Twilio endpoints
+const createTwilioEndpoints = require('./twilio-endpoints');
+
 // Initialize OpenAI
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
@@ -55,6 +58,14 @@ const upload = multer({
 app.use(express.static('public'));
 app.use(express.json());
 
+// Add Twilio endpoints
+try {
+  createTwilioEndpoints(app);
+  console.log('[SERVER] Twilio endpoints added successfully');
+} catch (error) {
+  console.error('[SERVER ERROR] Failed to add Twilio endpoints:', error.message);
+}
+
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
@@ -75,7 +86,8 @@ app.get('/room/:roomId', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'room.html'));
 });
 
-// Handle chunk uploads
+// Handle chunk uploads - DEPRECATED (using Twilio recording now)
+/*
 app.post('/api/upload-chunk', upload.single('audio'), async (req, res) => {
   try {
     const { roomId, streamType, chunkIndex, timestamp } = req.body;
@@ -149,8 +161,10 @@ app.post('/api/upload-chunk', upload.single('audio'), async (req, res) => {
     res.status(500).json({ success: false, error: error.message });
   }
 });
+*/
 
-// Handle recording completion
+// Handle recording completion - DEPRECATED (using Twilio recording now)
+/*
 app.post('/api/recording-complete', express.json(), async (req, res) => {
   try {
     const { roomId, totalChunks, duration } = req.body;
@@ -212,8 +226,10 @@ app.post('/api/recording-complete', express.json(), async (req, res) => {
     res.status(500).json({ success: false, error: error.message });
   }
 });
+*/
 
-// Handle abrupt recording end (browser closed)
+// Handle abrupt recording end - DEPRECATED (using Twilio recording now)
+/*
 app.post('/api/recording-abort', upload.none(), async (req, res) => {
   try {
     const { roomId, abruptEnd, lastChunk } = req.body;
@@ -254,6 +270,7 @@ app.post('/api/recording-abort', upload.none(), async (req, res) => {
     res.json({ success: true }); // Return success anyway to avoid client errors
   }
 });
+*/
 
 io.on('connection', (socket) => {
   console.log('User connected:', socket.id);
@@ -264,39 +281,95 @@ io.on('connection', (socket) => {
     currentRoom = roomId;
     socket.join(roomId);
     
-    // Get all clients in the room using Socket.IO's adapter
+    // Store room in rooms map if not exists
+    if (!rooms.has(roomId)) {
+      rooms.set(roomId, {
+        id: roomId,
+        users: [],
+        createdAt: Date.now()
+      });
+    }
+    
+    const room = rooms.get(roomId);
+    room.users.push(socket.id);
+    
+    // Get all clients in the room
     const clientsInRoom = await io.in(roomId).allSockets();
-    const otherUsers = Array.from(clientsInRoom).filter(id => id !== socket.id);
-    
     console.log(`Room ${roomId} now has ${clientsInRoom.size} users`);
-    console.log(`Other users in room: ${otherUsers.join(', ')}`);
     
-    // Send the list of other users to the newly joined client
-    socket.emit('other-users', otherUsers);
+    // Notify the joining user that room was joined successfully
+    socket.emit('room-joined', { roomId, users: Array.from(clientsInRoom) });
     
-    // Notify other users in the room that someone joined
-    socket.to(roomId).emit('user-joined', socket.id);
-    
-    socket.on('offer', (offer, to) => {
-      console.log(`Relaying offer from ${socket.id} to ${to}`);
-      io.to(to).emit('offer', offer, socket.id);
+    // Notify other users in the room
+    if (clientsInRoom.size > 1) {
+      socket.to(roomId).emit('user-connected', socket.id);
+    }
+  });
+  
+  // Handle offer/answer/ICE candidates
+  socket.on('offer', (data) => {
+    console.log(`Relaying offer from ${socket.id} in room ${data.roomId}`);
+    socket.to(data.roomId).emit('offer', {
+      offer: data.offer,
+      from: socket.id
     });
-    
-    socket.on('answer', (answer, to) => {
-      console.log(`Relaying answer from ${socket.id} to ${to}`);
-      io.to(to).emit('answer', answer, socket.id);
+  });
+  
+  socket.on('answer', (data) => {
+    console.log(`Relaying answer from ${socket.id} to ${data.to}`);
+    io.to(data.to).emit('answer', {
+      answer: data.answer,
+      from: socket.id
     });
-    
-    socket.on('ice-candidate', (candidate, to) => {
-      io.to(to).emit('ice-candidate', candidate, socket.id);
+  });
+  
+  socket.on('ice-candidate', (data) => {
+    socket.to(data.roomId).emit('ice-candidate', {
+      candidate: data.candidate,
+      from: socket.id
     });
-    
-    socket.on('disconnect', () => {
-      console.log(`User disconnected: ${socket.id} from room ${currentRoom}`);
-      if (currentRoom) {
-        socket.to(currentRoom).emit('user-left', socket.id);
+  });
+  
+  // Handle audio mute state
+  socket.on('audio-state', (data) => {
+    console.log(`User ${socket.id} audio state: ${data.muted ? 'muted' : 'unmuted'}`);
+    socket.to(data.roomId).emit('audio-state', {
+      userId: socket.id,
+      muted: data.muted
+    });
+  });
+  
+  // Handle recording events
+  socket.on('start-recording', (data) => {
+    console.log(`[RECORDING] Interviewer ${socket.id} started recording in room ${data.roomId}`);
+    // Notify all other users in the room to join Twilio recording
+    socket.to(data.roomId).emit('start-recording', {
+      roomId: data.roomId
+    });
+  });
+  
+  socket.on('stop-recording', (data) => {
+    console.log(`[RECORDING] Interviewer ${socket.id} stopped recording in room ${data.roomId}`);
+    // Notify all other users in the room to leave Twilio recording
+    socket.to(data.roomId).emit('stop-recording', {
+      roomId: data.roomId
+    });
+  });
+  
+  socket.on('disconnect', () => {
+    console.log(`User disconnected: ${socket.id} from room ${currentRoom}`);
+    if (currentRoom) {
+      socket.to(currentRoom).emit('user-disconnected', socket.id);
+      
+      // Remove user from room
+      const room = rooms.get(currentRoom);
+      if (room) {
+        room.users = room.users.filter(id => id !== socket.id);
+        if (room.users.length === 0) {
+          console.log(`Room ${currentRoom} is now empty`);
+        }
       }
-    });
+    }
   });
 });
 

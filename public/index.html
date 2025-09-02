@@ -94,6 +94,113 @@
             color: #2c5282;
             font-size: 0.9rem;
         }
+        
+        .recordings-section {
+            margin-top: 2rem;
+            padding-top: 2rem;
+            border-top: 2px solid #e2e8f0;
+        }
+        
+        .recordings-title {
+            color: #333;
+            margin-bottom: 1rem;
+            font-size: 1.3rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .refresh-btn {
+            padding: 0.5rem 1rem;
+            background: #48bb78;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .refresh-btn:hover {
+            background: #38a169;
+        }
+        
+        .recordings-list {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+        
+        .recording-item {
+            padding: 1rem;
+            background: #f7fafc;
+            border-radius: 10px;
+            border: 1px solid #e2e8f0;
+            transition: all 0.3s;
+        }
+        
+        .recording-item:hover {
+            background: #edf2f7;
+            border-color: #cbd5e0;
+        }
+        
+        .recording-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+        
+        .recording-room {
+            font-weight: 600;
+            color: #2d3748;
+        }
+        
+        .recording-date {
+            color: #718096;
+            font-size: 0.9rem;
+        }
+        
+        .recording-files {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+        }
+        
+        .recording-file {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.3rem 0.6rem;
+            background: white;
+            border: 1px solid #cbd5e0;
+            border-radius: 5px;
+            color: #4a5568;
+            text-decoration: none;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+        }
+        
+        .recording-file:hover {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+        
+        .no-recordings {
+            text-align: center;
+            padding: 2rem;
+            color: #718096;
+            background: #f7fafc;
+            border-radius: 10px;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 1rem;
+            color: #718096;
+        }
     </style>
 </head>
 <body>
@@ -116,6 +223,16 @@
             
             <div class="info">
                 ⚠️ Important: Share the candidate link with interviewees. Use your interviewer link to join with recording controls.
+            </div>
+        </div>
+        
+        <div class="recordings-section">
+            <div class="recordings-title">
+                <span>📹 Recordings</span>
+                <button class="refresh-btn" id="refreshRecordings">Refresh</button>
+            </div>
+            <div id="recordingsList" class="recordings-list">
+                <div class="loading">Loading recordings...</div>
             </div>
         </div>
     </div>
@@ -175,6 +292,85 @@
                 console.error('Failed to copy:', err);
             });
         });
+        
+        // Recordings functionality
+        const recordingsList = document.getElementById('recordingsList');
+        const refreshBtn = document.getElementById('refreshRecordings');
+        
+        async function loadRecordings() {
+            recordingsList.innerHTML = '<div class="loading">Loading recordings...</div>';
+            
+            try {
+                const response = await fetch('/api/recordings');
+                const data = await response.json();
+                
+                if (!data.success) {
+                    throw new Error(data.error || 'Failed to load recordings');
+                }
+                
+                if (data.recordings.length === 0) {
+                    recordingsList.innerHTML = '<div class="no-recordings">No recordings available yet. Recordings will appear here after you complete an interview.</div>';
+                    return;
+                }
+                
+                recordingsList.innerHTML = '';
+                
+                data.recordings.forEach(recording => {
+                    const recordingEl = document.createElement('div');
+                    recordingEl.className = 'recording-item';
+                    
+                    const date = new Date(recording.date);
+                    const dateStr = date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+                    
+                    let filesHtml = '';
+                    
+                    // Add transcript link if available
+                    if (recording.hasTranscript) {
+                        filesHtml += `
+                            <a href="${recording.transcriptPath}" class="recording-file" style="background: #48bb78; color: white; border-color: #48bb78;">
+                                📝 View Transcript
+                            </a>
+                            <a href="${recording.transcriptPath}?format=json" class="recording-file" download>
+                                📊 Download JSON
+                            </a>
+                        `;
+                    }
+                    
+                    recording.files.forEach(file => {
+                        const displayName = file.replace(/_/g, ' ').replace(/\.[^/.]+$/, '');
+                        filesHtml += `
+                            <a href="${recording.path}/${file}" class="recording-file" download>
+                                🎵 ${displayName}
+                            </a>
+                        `;
+                    });
+                    
+                    recordingEl.innerHTML = `
+                        <div class="recording-header">
+                            <div class="recording-room">
+                                Room: ${recording.roomId.substring(0, 8)}...
+                                ${recording.hasTranscript ? '<span style="color: #48bb78; margin-left: 10px;">✓ Transcribed</span>' : ''}
+                            </div>
+                            <div class="recording-date">${dateStr}</div>
+                        </div>
+                        <div class="recording-files">
+                            ${filesHtml}
+                        </div>
+                    `;
+                    
+                    recordingsList.appendChild(recordingEl);
+                });
+                
+            } catch (error) {
+                console.error('Error loading recordings:', error);
+                recordingsList.innerHTML = '<div class="no-recordings">Error loading recordings. Please try again.</div>';
+            }
+        }
+        
+        refreshBtn.addEventListener('click', loadRecordings);
+        
+        // Load recordings on page load
+        loadRecordings();
     </script>
 </body>
 </html>

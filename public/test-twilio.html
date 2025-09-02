@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Twilio Recording</title>
+    <script src="https://sdk.twilio.com/js/video/releases/2.27.0/twilio-video.min.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 0;
+        }
+        .container {
+            background: white;
+            padding: 2rem;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 800px;
+            width: 90%;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 1rem;
+        }
+        .status {
+            padding: 1rem;
+            background: #f7fafc;
+            border-radius: 10px;
+            margin: 1rem 0;
+            font-family: monospace;
+            font-size: 0.9rem;
+        }
+        .status.success {
+            background: #c6f6d5;
+            color: #22543d;
+        }
+        .status.error {
+            background: #fed7d7;
+            color: #742a2a;
+        }
+        .button {
+            padding: 0.75rem 1.5rem;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 1rem;
+            cursor: pointer;
+            margin: 0.5rem;
+            transition: all 0.3s;
+        }
+        .button:hover {
+            background: #5a67d8;
+            transform: translateY(-2px);
+        }
+        .button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .button.danger {
+            background: #e53e3e;
+        }
+        .button.danger:hover {
+            background: #c53030;
+        }
+        .button.success {
+            background: #48bb78;
+        }
+        .button.success:hover {
+            background: #38a169;
+        }
+        .video-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+        .video-wrapper {
+            background: #1a1a2e;
+            border-radius: 10px;
+            padding: 1rem;
+            text-align: center;
+        }
+        .video-wrapper h3 {
+            color: white;
+            margin-bottom: 0.5rem;
+        }
+        video {
+            width: 100%;
+            border-radius: 10px;
+            background: #000;
+        }
+        .log {
+            background: #1a1a2e;
+            color: #0f0;
+            padding: 1rem;
+            border-radius: 10px;
+            font-family: monospace;
+            font-size: 0.85rem;
+            max-height: 200px;
+            overflow-y: auto;
+            margin-top: 1rem;
+        }
+        .log div {
+            margin: 0.25rem 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎥 Test Twilio Recording</h1>
+        
+        <div class="status" id="status">
+            Ready to test Twilio recording alongside your WebRTC
+        </div>
+
+        <div>
+            <button class="button" id="startTest" onclick="startTest()">
+                Start Test Recording
+            </button>
+            <button class="button success" id="joinTwilio" onclick="joinTwilio()" disabled>
+                Join Twilio Room
+            </button>
+            <button class="button danger" id="stopTest" onclick="stopTest()" disabled>
+                Stop & Download Recording
+            </button>
+        </div>
+
+        <div class="video-container">
+            <div class="video-wrapper">
+                <h3>Local Stream</h3>
+                <video id="localVideo" autoplay muted></video>
+            </div>
+            <div class="video-wrapper">
+                <h3>Twilio Preview</h3>
+                <video id="twilioVideo" autoplay muted></video>
+            </div>
+        </div>
+
+        <div class="log" id="log">
+            <div>📝 Activity log will appear here...</div>
+        </div>
+    </div>
+
+    <script>
+        let localStream;
+        let twilioRoom;
+        let twilioToken;
+        let twilioRoomName;
+        let testRoomId;
+        let isInterviewer = true; // For testing, you're the interviewer
+
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('log');
+            const entry = document.createElement('div');
+            const timestamp = new Date().toLocaleTimeString();
+            const icon = type === 'error' ? '❌' : type === 'success' ? '✅' : '📝';
+            entry.innerHTML = `[${timestamp}] ${icon} ${message}`;
+            logDiv.appendChild(entry);
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(message);
+        }
+
+        async function startTest() {
+            try {
+                log('Starting test...');
+                document.getElementById('startTest').disabled = true;
+                
+                // Generate test room ID
+                testRoomId = 'test_' + Date.now();
+                log('Test room ID: ' + testRoomId);
+
+                // Get local media stream
+                log('Getting camera and microphone access...');
+                localStream = await navigator.mediaDevices.getUserMedia({
+                    video: true,
+                    audio: true
+                });
+                
+                document.getElementById('localVideo').srcObject = localStream;
+                log('Local stream ready', 'success');
+
+                // Create Twilio room
+                log('Creating Twilio room...');
+                const response = await fetch('/api/twilio/start', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ roomId: testRoomId })
+                });
+
+                const data = await response.json();
+                
+                if (!data.success) {
+                    throw new Error(data.error);
+                }
+
+                twilioRoomName = data.room.name;
+                twilioToken = data.tokens[isInterviewer ? 'interviewer' : 'interviewee'];
+                
+                log(`Twilio room created: ${twilioRoomName}`, 'success');
+                log('Token received for: ' + (isInterviewer ? 'interviewer' : 'interviewee'));
+                
+                document.getElementById('status').innerHTML = 
+                    `✅ Twilio room ready: ${twilioRoomName}<br>Click "Join Twilio Room" to start recording`;
+                document.getElementById('status').className = 'status success';
+                
+                document.getElementById('joinTwilio').disabled = false;
+                
+            } catch (error) {
+                log('Error: ' + error.message, 'error');
+                document.getElementById('status').textContent = 'Error: ' + error.message;
+                document.getElementById('status').className = 'status error';
+                document.getElementById('startTest').disabled = false;
+            }
+        }
+
+        async function joinTwilio() {
+            try {
+                log('Connecting to Twilio room...');
+                document.getElementById('joinTwilio').disabled = true;
+
+                // Connect to Twilio room
+                twilioRoom = await Twilio.Video.connect(twilioToken, {
+                    name: twilioRoomName,
+                    audio: true,
+                    video: true,
+                    dominantSpeaker: true,
+                    preferredVideoCodecs: ['H264'],
+                    networkQuality: {
+                        local: 1,
+                        remote: 1
+                    }
+                });
+
+                log(`Connected to Twilio room: ${twilioRoom.name}`, 'success');
+                log(`Recording is: ${twilioRoom.isRecording ? 'ACTIVE' : 'NOT ACTIVE'}`);
+
+                // Show local participant info
+                log(`You are: ${twilioRoom.localParticipant.identity}`);
+
+                // Attach local tracks to Twilio
+                const localVideoTrack = localStream.getVideoTracks()[0];
+                const localAudioTrack = localStream.getAudioTracks()[0];
+
+                if (localVideoTrack) {
+                    const twilioVideoTrack = new Twilio.Video.LocalVideoTrack(localVideoTrack);
+                    await twilioRoom.localParticipant.publishTrack(twilioVideoTrack);
+                    twilioVideoTrack.attach(document.getElementById('twilioVideo'));
+                    log('Video track published to Twilio', 'success');
+                }
+
+                if (localAudioTrack) {
+                    const twilioAudioTrack = new Twilio.Video.LocalAudioTrack(localAudioTrack);
+                    await twilioRoom.localParticipant.publishTrack(twilioAudioTrack);
+                    log('Audio track published to Twilio', 'success');
+                }
+
+                // Listen for recording events
+                twilioRoom.on('recordingStarted', () => {
+                    log('🔴 RECORDING STARTED', 'success');
+                    document.getElementById('status').innerHTML = 
+                        '🔴 RECORDING IN PROGRESS<br>Twilio is recording your audio and video';
+                });
+
+                twilioRoom.on('recordingStopped', () => {
+                    log('⏹️ RECORDING STOPPED', 'success');
+                });
+
+                // Listen for other participants
+                twilioRoom.on('participantConnected', participant => {
+                    log(`Participant connected: ${participant.identity}`, 'success');
+                });
+
+                document.getElementById('status').innerHTML = 
+                    `🔴 Connected to Twilio - Recording Active<br>Room: ${twilioRoomName}`;
+                document.getElementById('stopTest').disabled = false;
+
+            } catch (error) {
+                log('Error joining Twilio: ' + error.message, 'error');
+                document.getElementById('status').textContent = 'Error: ' + error.message;
+                document.getElementById('status').className = 'status error';
+                document.getElementById('joinTwilio').disabled = false;
+            }
+        }
+
+        async function stopTest() {
+            try {
+                log('Stopping test...');
+                document.getElementById('stopTest').disabled = true;
+
+                // Disconnect from Twilio
+                if (twilioRoom) {
+                    twilioRoom.disconnect();
+                    log('Disconnected from Twilio room');
+                }
+
+                // Stop Twilio recording and download
+                log('Stopping Twilio recording...');
+                const response = await fetch('/api/twilio/stop', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ roomId: testRoomId })
+                });
+
+                const data = await response.json();
+                
+                if (!data.success) {
+                    throw new Error(data.error);
+                }
+
+                log('Recording stopped successfully', 'success');
+                log(`Downloaded ${data.recordings.length} recordings:`);
+                
+                data.recordings.forEach(rec => {
+                    log(`- ${rec.identity}: ${rec.filename} (${rec.duration}s, ${rec.size} bytes)`);
+                });
+
+                document.getElementById('status').innerHTML = 
+                    `✅ Test Complete!<br>` +
+                    `Recordings saved to: recordings/${testRoomId}/twilio/<br>` +
+                    `Files: ${data.recordings.map(r => r.filename).join(', ')}`;
+                document.getElementById('status').className = 'status success';
+
+                // Stop local stream
+                if (localStream) {
+                    localStream.getTracks().forEach(track => track.stop());
+                    document.getElementById('localVideo').srcObject = null;
+                }
+
+                // Reset buttons
+                document.getElementById('startTest').disabled = false;
+                document.getElementById('joinTwilio').disabled = true;
+                document.getElementById('stopTest').disabled = true;
+
+            } catch (error) {
+                log('Error stopping: ' + error.message, 'error');
+                document.getElementById('status').textContent = 'Error: ' + error.message;
+                document.getElementById('status').className = 'status error';
+                document.getElementById('stopTest').disabled = false;
+            }
+        }
+
+        // Check recording status periodically
+        async function checkStatus() {
+            if (testRoomId && twilioRoom) {
+                try {
+                    const response = await fetch(`/api/twilio/status/${testRoomId}`);
+                    const data = await response.json();
+                    if (data.success) {
+                        const duration = data.duration;
+                        const mins = Math.floor(duration / 60);
+                        const secs = duration % 60;
+                        const timeStr = `${mins}:${secs.toString().padStart(2, '0')}`;
+                        
+                        if (twilioRoom.isRecording) {
+                            document.getElementById('status').innerHTML = 
+                                `🔴 RECORDING - ${timeStr}<br>Room: ${data.roomName}`;
+                        }
+                    }
+                } catch (error) {
+                    // Ignore status check errors
+                }
+            }
+        }
+
+        setInterval(checkStatus, 1000);
+
+        log('Test page ready - Click "Start Test Recording" to begin');
+    </script>
+</body>
+</html>
