@@ -220,7 +220,14 @@ app.post('/api/recording-abort', upload.none(), async (req, res) => {
     
     console.log(`Recording aborted for room ${roomId} at chunk ${lastChunk}`);
     
-    const recordingDir = path.join(__dirname, 'recordings', roomId);
+    // Get the actual directory name from mapping
+    const dirName = roomToDirectory.get(roomId);
+    if (!dirName) {
+      console.log(`No recording directory found for room ${roomId}, skipping abort handling`);
+      return res.json({ success: true });
+    }
+    
+    const recordingDir = path.join(__dirname, 'recordings', dirName);
     
     // Only try to update metadata if the recording directory exists
     if (await fs.pathExists(recordingDir)) {
@@ -236,8 +243,9 @@ app.post('/api/recording-abort', upload.none(), async (req, res) => {
       metadata.abortedAt = Date.now();
       
       await fs.writeJson(metadataPath, metadata, { spaces: 2 });
+      console.log(`Updated abort metadata for room ${roomId} in directory ${dirName}`);
     } else {
-      console.log(`No recording directory found for room ${roomId}, skipping abort handling`);
+      console.log(`Recording directory ${recordingDir} does not exist, skipping abort handling`);
     }
     
     res.json({ success: true });

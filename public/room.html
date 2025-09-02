@@ -290,6 +290,7 @@
         let chunkIndex = 0;
         let recordingStartTime;
         let isProgressiveRecording = false;
+        let chunkIntervalId = null; // Store interval ID to clear it later
         
         // Check if this user is the interviewer (room creator)
         // Check URL parameter first, then session storage
@@ -672,44 +673,85 @@
                 remoteStream.getAudioTracks().forEach(track => remoteAudioStream.addTrack(track));
             }
             
+            // Determine supported MIME type
+            const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : 'audio/webm';
+            console.log('Using MIME type:', mimeType);
+            
             // Start local audio recorder
             if (localAudioStream.getAudioTracks().length > 0) {
-                localAudioRecorder = new MediaRecorder(localAudioStream, {
-                    mimeType: 'audio/webm;codecs=opus',
-                    audioBitsPerSecond: 128000
-                });
-                
-                localAudioRecorder.ondataavailable = (event) => {
-                    if (event.data.size > 0) {
-                        uploadChunk(event.data, 'local', chunkIndex);
-                    }
-                };
-                
-                localAudioRecorder.start(30000); // 30 second chunks
-                console.log('Started recording local audio');
+                try {
+                    localAudioRecorder = new MediaRecorder(localAudioStream, {
+                        mimeType: mimeType,
+                        audioBitsPerSecond: 128000
+                    });
+                    
+                    let localChunks = [];
+                    
+                    localAudioRecorder.ondataavailable = (event) => {
+                        if (event.data && event.data.size > 0) {
+                            localChunks.push(event.data);
+                            console.log(`Local chunk received: ${event.data.size} bytes`);
+                            
+                            // Upload accumulated chunks as a single blob
+                            if (localChunks.length > 0) {
+                                const blob = new Blob(localChunks, { type: mimeType });
+                                uploadChunk(blob, 'local', chunkIndex);
+                                localChunks = []; // Clear after upload
+                            }
+                        }
+                    };
+                    
+                    localAudioRecorder.onerror = (event) => {
+                        console.error('Local recorder error:', event);
+                    };
+                    
+                    localAudioRecorder.start(30000); // Request data every 30 seconds
+                    console.log('Started recording local audio');
+                } catch (error) {
+                    console.error('Failed to start local audio recorder:', error);
+                }
             }
             
             // Start remote audio recorder
             if (remoteAudioStream.getAudioTracks().length > 0) {
-                remoteAudioRecorder = new MediaRecorder(remoteAudioStream, {
-                    mimeType: 'audio/webm;codecs=opus',
-                    audioBitsPerSecond: 128000
-                });
-                
-                remoteAudioRecorder.ondataavailable = (event) => {
-                    if (event.data.size > 0) {
-                        uploadChunk(event.data, 'remote', chunkIndex);
-                    }
-                };
-                
-                remoteAudioRecorder.start(30000); // 30 second chunks
-                console.log('Started recording remote audio');
+                try {
+                    remoteAudioRecorder = new MediaRecorder(remoteAudioStream, {
+                        mimeType: mimeType,
+                        audioBitsPerSecond: 128000
+                    });
+                    
+                    let remoteChunks = [];
+                    
+                    remoteAudioRecorder.ondataavailable = (event) => {
+                        if (event.data && event.data.size > 0) {
+                            remoteChunks.push(event.data);
+                            console.log(`Remote chunk received: ${event.data.size} bytes`);
+                            
+                            // Upload accumulated chunks as a single blob
+                            if (remoteChunks.length > 0) {
+                                const blob = new Blob(remoteChunks, { type: mimeType });
+                                uploadChunk(blob, 'remote', chunkIndex);
+                                remoteChunks = []; // Clear after upload
+                            }
+                        }
+                    };
+                    
+                    remoteAudioRecorder.onerror = (event) => {
+                        console.error('Remote recorder error:', event);
+                    };
+                    
+                    remoteAudioRecorder.start(30000); // Request data every 30 seconds
+                    console.log('Started recording remote audio');
+                } catch (error) {
+                    console.error('Failed to start remote audio recorder:', error);
+                }
             }
             
             // Increment chunk index every 30 seconds
-            setInterval(() => {
+            chunkIntervalId = setInterval(() => {
                 if (isProgressiveRecording) {
                     chunkIndex++;
+                    console.log(`Chunk index incremented to: ${chunkIndex}`);
                 }
             }, 30000);
             
@@ -727,24 +769,40 @@
         function stopProgressiveRecording() {
             isProgressiveRecording = false;
             
-            if (localAudioRecorder && localAudioRecorder.state !== 'inactive') {
-                localAudioRecorder.stop();
+            // Clear the chunk interval
+            if (chunkIntervalId) {
+                clearInterval(chunkIntervalId);
+                chunkIntervalId = null;
+                console.log('Cleared chunk interval');
             }
             
-            if (remoteAudioRecorder && remoteAudioRecorder.state !== 'inactive') {
-                remoteAudioRecorder.stop();
+            // Request final data before stopping
+            if (localAudioRecorder && localAudioRecorder.state === 'recording') {
+                localAudioRecorder.requestData(); // Get any remaining data
+                setTimeout(() => {
+                    localAudioRecorder.stop();
+                }, 100);
             }
             
-            // Notify server that recording is complete
-            fetch('/api/recording-complete', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    roomId: roomId,
-                    totalChunks: chunkIndex + 1,
-                    duration: Date.now() - recordingStartTime
-                })
-            });
+            if (remoteAudioRecorder && remoteAudioRecorder.state === 'recording') {
+                remoteAudioRecorder.requestData(); // Get any remaining data
+                setTimeout(() => {
+                    remoteAudioRecorder.stop();
+                }, 100);
+            }
+            
+            // Notify server that recording is complete (with a slight delay to ensure final chunks are uploaded)
+            setTimeout(() => {
+                fetch('/api/recording-complete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        roomId: roomId,
+                        totalChunks: chunkIndex + 1,
+                        duration: Date.now() - recordingStartTime
+                    })
+                });
+            }, 500);
             
             // Update UI
             document.getElementById('startRecording').style.display = 'inline-flex';
@@ -755,6 +813,12 @@
         }
         
         async function uploadChunk(blob, streamType, index) {
+            // Skip empty or tiny blobs
+            if (!blob || blob.size < 100) {
+                console.warn(`Skipping ${streamType} chunk ${index} - too small (${blob ? blob.size : 0} bytes)`);
+                return;
+            }
+            
             console.log(`📤 Uploading ${streamType} chunk ${index}, size: ${blob.size} bytes`);
             
             const formData = new FormData();

@@ -102,11 +102,20 @@
         <button class="button" id="createRoom">Create Video Call Room</button>
         
         <div class="room-link" id="roomLinkContainer">
-            <p style="margin-bottom: 0.5rem; color: #666;">Share this link to invite someone:</p>
-            <a href="#" class="link-text" id="roomLink" target="_blank"></a>
-            <button class="button copy-button" id="copyLink">Copy Link</button>
+            <div style="margin-bottom: 1.5rem;">
+                <p style="margin-bottom: 0.5rem; color: #666; font-weight: 600;">Your link (as interviewer):</p>
+                <a href="#" class="link-text" id="interviewerLink" target="_blank"></a>
+                <button class="button copy-button" style="background: #667eea; margin-top: 0.5rem;" id="joinAsInterviewer">Join as Interviewer</button>
+            </div>
+            
+            <div style="border-top: 1px solid #e2e8f0; padding-top: 1.5rem;">
+                <p style="margin-bottom: 0.5rem; color: #666; font-weight: 600;">Share this link with the candidate:</p>
+                <a href="#" class="link-text" id="roomLink" target="_blank"></a>
+                <button class="button copy-button" id="copyLink">Copy Candidate Link</button>
+            </div>
+            
             <div class="info">
-                Click the link to join the call yourself, or share it with others.
+                ⚠️ Important: Share the candidate link with interviewees. Use your interviewer link to join with recording controls.
             </div>
         </div>
     </div>
@@ -115,7 +124,9 @@
         const createRoomBtn = document.getElementById('createRoom');
         const roomLinkContainer = document.getElementById('roomLinkContainer');
         const roomLink = document.getElementById('roomLink');
+        const interviewerLink = document.getElementById('interviewerLink');
         const copyLinkBtn = document.getElementById('copyLink');
+        const joinAsInterviewerBtn = document.getElementById('joinAsInterviewer');
 
         createRoomBtn.addEventListener('click', async () => {
             try {
@@ -127,10 +138,16 @@
                 });
                 
                 const data = await response.json();
-                // Add creator parameter for the interviewer
+                
+                // Set up interviewer link (with creator=true)
                 const creatorUrl = `${data.url}?creator=true`;
-                roomLink.href = creatorUrl;
-                roomLink.textContent = creatorUrl;
+                interviewerLink.href = creatorUrl;
+                interviewerLink.textContent = creatorUrl;
+                
+                // Set up candidate link (clean, without creator parameter)
+                roomLink.href = data.url;
+                roomLink.textContent = data.url;
+                
                 roomLinkContainer.classList.add('active');
                 
                 // Mark this user as the room creator (interviewer)
@@ -143,11 +160,16 @@
             }
         });
 
+        joinAsInterviewerBtn.addEventListener('click', () => {
+            window.open(interviewerLink.href, '_blank');
+        });
+
         copyLinkBtn.addEventListener('click', () => {
+            // Copy the clean candidate link (without creator=true)
             navigator.clipboard.writeText(roomLink.href).then(() => {
                 copyLinkBtn.textContent = 'Copied!';
                 setTimeout(() => {
-                    copyLinkBtn.textContent = 'Copy Link';
+                    copyLinkBtn.textContent = 'Copy Candidate Link';
                 }, 2000);
             }).catch(err => {
                 console.error('Failed to copy:', err);
