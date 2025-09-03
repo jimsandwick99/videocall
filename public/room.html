@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Professional Interview Room</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='80' font-size='80'>🎥</text></svg>">
     <style>
@@ -454,39 +454,284 @@
             display: block;
         }
         
-        /* Responsive design */
-        @media (max-width: 1024px) {
-            .video-grid {
-                grid-template-columns: 1fr;
+        /* Mobile-specific styles */
+        @media (max-width: 768px) {
+            body {
+                position: fixed;
+                width: 100%;
+                height: 100vh;
+                height: 100dvh; /* Dynamic viewport height for mobile */
+                overflow: hidden;
+                padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
             }
             
             .main-container {
-                padding: 1rem;
+                position: fixed;
+                top: 60px;
+                left: 0;
+                right: 0;
+                bottom: 70px;
+                padding: 0;
+                max-height: none;
+                height: calc(100vh - 130px);
+                overflow: hidden;
             }
-        }
-        
-        @media (max-width: 768px) {
+            
+            .video-grid {
+                grid-template-columns: 1fr;
+                gap: 0;
+                height: 100%;
+                position: relative;
+            }
+            
+            /* Smaller local video (self-view) on mobile */
+            .video-card:first-child {
+                position: absolute;
+                top: 10px;
+                right: 10px;
+                width: 90px;
+                height: 120px;
+                z-index: 85;
+                aspect-ratio: unset;
+                border-radius: 12px;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+            }
+            
+            /* Hide overlay info for small self-view */
+            .video-card:first-child .video-overlay {
+                display: none;
+            }
+            
+            /* Main remote video takes full space */
+            .video-card:last-child {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                aspect-ratio: unset;
+                border-radius: 0;
+            }
+            
             .header {
-                padding: 1rem;
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                height: 60px;
+                padding: 0.75rem 1rem;
+                font-size: 0.85rem;
+                z-index: 100;
+            }
+            
+            .room-badge {
+                padding: 0.35rem 0.75rem;
+                font-size: 0.75rem;
+            }
+            
+            .connection-status {
+                padding: 0.35rem 0.75rem;
+                font-size: 0.75rem;
             }
             
             .control-bar {
-                padding: 1rem;
+                position: fixed;
+                bottom: 0;
+                bottom: env(safe-area-inset-bottom);
+                left: 0;
+                right: 0;
+                height: 70px;
+                padding: 0.75rem;
+                padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
                 gap: 0.5rem;
-                min-height: 80px;
+                background: rgba(10, 14, 39, 0.98);
+                z-index: 100;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                border-top: 1px solid rgba(255, 255, 255, 0.1);
             }
             
             .control-btn {
-                width: 45px;
-                height: 45px;
-                font-size: 1.1rem;
+                width: 42px;
+                height: 42px;
+                font-size: 1rem;
             }
             
             .control-group {
                 gap: 0.5rem;
                 padding: 0 0.5rem;
-                flex-wrap: nowrap;
             }
+            
+            .control-label {
+                display: none;
+            }
+            
+            .end-call-btn {
+                width: 50px;
+            }
+            
+            .participant-info {
+                gap: 0.5rem;
+            }
+            
+            .participant-avatar {
+                width: 30px;
+                height: 30px;
+                font-size: 1rem;
+            }
+            
+            .participant-name {
+                font-size: 0.85rem;
+            }
+            
+            .participant-role {
+                font-size: 0.7rem;
+            }
+            
+            /* Hide recording controls on mobile for non-interviewers */
+            #recordingControls {
+                display: none !important;
+            }
+            
+            /* Compact timer - position above control bar */
+            .timer {
+                position: fixed;
+                top: auto;
+                bottom: 75px;
+                right: 10px;
+                padding: 0.5rem 1rem;
+                font-size: 0.85rem;
+                border-radius: 20px;
+                z-index: 99;
+            }
+            
+            /* Recording indicator positioning */
+            .recording-indicator {
+                position: fixed;
+                top: 65px;
+                left: 50%;
+                transform: translateX(-50%);
+                z-index: 99;
+            }
+            
+            /* Ensure video doesn't go under controls */
+            video {
+                object-fit: contain;
+            }
+        }
+        
+        /* Small mobile devices */
+        @media (max-width: 480px) {
+            .video-card:first-child {
+                width: 80px;
+                height: 110px;
+                top: 5px;
+                right: 5px;
+            }
+            
+            .main-container {
+                top: 50px;
+                bottom: 65px;
+                height: calc(100vh - 115px);
+            }
+            
+            .header {
+                height: 50px;
+                padding: 0.5rem;
+            }
+            
+            .control-bar {
+                height: 65px;
+                padding: 0.5rem;
+            }
+            
+            .control-btn {
+                width: 40px;
+                height: 40px;
+                font-size: 0.95rem;
+            }
+            
+            .header {
+                padding: 0.5rem;
+            }
+            
+            .room-info {
+                gap: 0.5rem;
+            }
+        }
+        
+        /* Responsive design for tablets */
+        @media (min-width: 769px) and (max-width: 1024px) {
+            .video-grid {
+                grid-template-columns: 1fr;
+                gap: 1rem;
+            }
+            
+            .main-container {
+                padding: 1rem;
+            }
+            
+            .video-card {
+                max-height: 40vh;
+            }
+        }
+        
+        /* Larger screens */
+        @media (min-width: 1025px) {
+            .video-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+        
+        /* Toggle button for self-view expansion */
+        .expand-btn {
+            position: absolute;
+            bottom: 5px;
+            right: 5px;
+            width: 30px;
+            height: 30px;
+            background: rgba(0, 0, 0, 0.7);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            color: white;
+            font-size: 14px;
+            cursor: pointer;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+            transition: all 0.2s ease;
+        }
+        
+        @media (max-width: 768px) {
+            .video-card:first-child .expand-btn {
+                display: flex;
+            }
+        }
+        
+        .expand-btn:hover {
+            background: rgba(0, 0, 0, 0.9);
+            transform: scale(1.1);
+        }
+        
+        /* Expanded self-view state */
+        .video-card.expanded {
+            width: calc(100vw - 20px) !important;
+            height: calc(50vh - 20px) !important;
+            top: 50% !important;
+            left: 50% !important;
+            right: auto !important;
+            transform: translate(-50%, -50%);
+            z-index: 95;
+        }
+        
+        .video-card.expanded .video-overlay {
+            display: flex !important;
+        }
+        
+        .video-card.expanded .expand-btn {
+            font-size: 18px;
         }
         
         /* Loading spinner */
@@ -614,6 +859,12 @@
             background: linear-gradient(90deg, rgba(240, 147, 251, 0.05) 0%, transparent 100%);
         }
         
+        .transcript-entry.system {
+            border-left-color: var(--warning);
+            background: linear-gradient(90deg, rgba(245, 158, 11, 0.05) 0%, transparent 100%);
+            font-style: italic;
+        }
+        
         .transcript-speaker {
             font-size: 0.75rem;
             font-weight: 600;
@@ -724,8 +975,8 @@
                 right: 0;
                 left: 0;
                 top: auto;
-                bottom: 90px;
-                height: 300px;
+                bottom: 70px;
+                height: 250px;
                 border-radius: 20px 20px 0 0;
             }
             
@@ -735,7 +986,17 @@
             
             .main-container.transcript-open {
                 padding-right: 2rem;
-                padding-bottom: 320px;
+                padding-bottom: 270px;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .transcript-panel {
+                display: none !important;
+            }
+            
+            .transcript-toggle-btn {
+                display: none !important;
             }
         }
     </style>
@@ -759,6 +1020,7 @@
             <!-- Local Video -->
             <div class="video-card" id="localVideoCard">
                 <video id="localVideo" autoplay muted playsinline></video>
+                <button class="expand-btn" id="expandBtn" title="Toggle size">⤢</button>
                 <div class="video-overlay">
                     <div class="participant-info">
                         <div class="participant-avatar" id="localAvatar">Y</div>
@@ -1124,8 +1386,20 @@
             if (data.muted) {
                 remoteBars.style.display = 'none';
                 remoteMuted.style.display = 'block';
+                
+                // Add notification to transcript when remote user mutes
+                if (isTranscriptOpen) {
+                    const remoteSpeaker = isInterviewer ? 'Interviewee' : 'Interviewer';
+                    addTranscriptEntry('System', `🔇 ${remoteSpeaker} muted their microphone`, 'system');
+                }
             } else {
                 remoteMuted.style.display = 'none';
+                
+                // Add notification to transcript when remote user unmutes
+                if (isTranscriptOpen) {
+                    const remoteSpeaker = isInterviewer ? 'Interviewee' : 'Interviewer';
+                    addTranscriptEntry('System', `🎤 ${remoteSpeaker} unmuted their microphone`, 'system');
+                }
             }
         });
         
@@ -1299,6 +1573,33 @@
             if (audioTrack) {
                 isAudioEnabled = !isAudioEnabled;
                 audioTrack.enabled = isAudioEnabled;
+                
+                // CRITICAL: Stop/start speech recognition based on mute state
+                if (!isAudioEnabled) {
+                    // STOP transcription when muted
+                    console.log('[MUTE] Stopping speech recognition - user muted');
+                    if (recognition) {
+                        recognition.abort(); // Use abort() instead of stop() for immediate termination
+                        isTranscribing = false;
+                    }
+                    // Add a system message to transcript
+                    if (isTranscriptOpen) {
+                        addTranscriptEntry('System', '🔇 Microphone muted - transcription paused', 'system');
+                        transcriptStatus.textContent = 'Muted';
+                    }
+                } else {
+                    // RESTART transcription when unmuted (only if transcript panel is open)
+                    console.log('[MUTE] Restarting speech recognition - user unmuted');
+                    if (isTranscriptOpen) {
+                        // Small delay to ensure clean restart after abort
+                        setTimeout(() => {
+                            if (!isTranscribing && isAudioEnabled) {
+                                addTranscriptEntry('System', '🎤 Microphone unmuted - transcription resumed', 'system');
+                                startSpeechRecognition();
+                            }
+                        }, 100);
+                    }
+                }
                 
                 // ALSO mute/unmute the Twilio track if recording
                 if (twilioLocalAudioTrack) {
@@ -1607,6 +1908,36 @@
         // Start the application
         initializeMedia();
         
+        // Mobile self-view expand/collapse functionality
+        const expandBtn = document.getElementById('expandBtn');
+        const localVideoCard = document.getElementById('localVideoCard');
+        let isExpanded = false;
+        
+        expandBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            isExpanded = !isExpanded;
+            
+            if (isExpanded) {
+                localVideoCard.classList.add('expanded');
+                expandBtn.innerHTML = '⤦';
+                expandBtn.title = 'Minimize';
+            } else {
+                localVideoCard.classList.remove('expanded');
+                expandBtn.innerHTML = '⤢';
+                expandBtn.title = 'Expand';
+            }
+        });
+        
+        // Click outside to minimize expanded video
+        document.addEventListener('click', (e) => {
+            if (isExpanded && !localVideoCard.contains(e.target)) {
+                isExpanded = false;
+                localVideoCard.classList.remove('expanded');
+                expandBtn.innerHTML = '⤢';
+                expandBtn.title = 'Expand';
+            }
+        });
+        
         // Real-time Transcript Functionality
         const transcriptPanel = document.getElementById('transcriptPanel');
         const transcriptToggle = document.getElementById('transcriptToggle');
@@ -1631,9 +1962,13 @@
                 mainContainer.classList.add('transcript-open');
                 transcriptToggle.innerHTML = '<span>✕</span>';
                 
-                // Start speech recognition if not already started
-                if (!isTranscribing) {
+                // Start speech recognition ONLY if not muted and not already started
+                if (!isTranscribing && isAudioEnabled) {
                     startSpeechRecognition();
+                } else if (!isAudioEnabled) {
+                    // Show muted status if microphone is muted
+                    addTranscriptEntry('System', '🔇 Microphone is muted. Unmute to start transcription.', 'system');
+                    transcriptStatus.textContent = 'Muted';
                 }
             } else {
                 transcriptPanel.classList.remove('active');
@@ -1645,6 +1980,13 @@
         
         // Initialize Speech Recognition
         function startSpeechRecognition() {
+            // CRITICAL: Don't start if microphone is muted
+            if (!isAudioEnabled) {
+                console.warn('[SPEECH] Cannot start recognition - microphone is muted');
+                transcriptStatus.textContent = 'Muted';
+                return;
+            }
+            
             // Check if browser supports speech recognition
             if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
                 console.warn('Speech recognition not supported in this browser');
@@ -1706,28 +2048,63 @@
             
             recognition.onerror = (event) => {
                 console.error('Speech recognition error:', event.error);
-                transcriptStatus.textContent = 'Error';
                 
+                // Handle different error types
                 if (event.error === 'no-speech') {
-                    // Restart recognition after no speech detected
-                    setTimeout(() => {
-                        if (isTranscriptOpen && recognition) {
-                            recognition.start();
-                        }
-                    }, 1000);
+                    // ONLY restart if NOT muted
+                    if (isAudioEnabled) {
+                        setTimeout(() => {
+                            if (isTranscriptOpen && isAudioEnabled && recognition) {
+                                try {
+                                    recognition.start();
+                                } catch (e) {
+                                    console.log('Recognition restart after no-speech failed:', e);
+                                }
+                            }
+                        }, 1000);
+                    }
                 } else if (event.error === 'not-allowed') {
-                    addTranscriptEntry('system', 'Microphone permission denied. Please allow microphone access.', 'system');
+                    transcriptStatus.textContent = 'Permission Denied';
+                    addTranscriptEntry('System', '⚠️ Microphone permission denied. Please allow microphone access.', 'system');
+                } else if (event.error === 'network') {
+                    // Network error - try to restart if conditions are met
+                    transcriptStatus.textContent = 'Network Error';
+                    if (isAudioEnabled && isTranscriptOpen) {
+                        console.log('Network error detected, attempting to restart...');
+                        setTimeout(() => {
+                            if (isTranscriptOpen && isAudioEnabled) {
+                                try {
+                                    recognition.start();
+                                    console.log('Restarted after network error');
+                                } catch (e) {
+                                    console.log('Failed to restart after network error:', e);
+                                    transcriptStatus.textContent = 'Error - Try refreshing';
+                                }
+                            }
+                        }, 500);
+                    }
+                } else if (event.error === 'aborted') {
+                    // Recognition was aborted, likely due to muting
+                    if (!isAudioEnabled) {
+                        transcriptStatus.textContent = 'Muted';
+                    } else {
+                        transcriptStatus.textContent = 'Stopped';
+                    }
+                } else {
+                    // Other errors
+                    transcriptStatus.textContent = 'Error';
+                    console.error('Unhandled recognition error:', event.error);
                 }
             };
             
             recognition.onend = () => {
                 isTranscribing = false;
-                transcriptStatus.textContent = 'Stopped';
                 
-                // Restart if panel is still open
-                if (isTranscriptOpen) {
+                // CRITICAL: Only restart if panel is open AND microphone is NOT muted
+                if (isTranscriptOpen && isAudioEnabled) {
+                    transcriptStatus.textContent = 'Restarting...';
                     setTimeout(() => {
-                        if (isTranscriptOpen && recognition) {
+                        if (isTranscriptOpen && isAudioEnabled && recognition) {
                             try {
                                 recognition.start();
                             } catch (e) {
@@ -1735,6 +2112,11 @@
                             }
                         }
                     }, 100);
+                } else if (!isAudioEnabled) {
+                    transcriptStatus.textContent = 'Muted';
+                    console.log('[SPEECH] Not restarting recognition - microphone is muted');
+                } else {
+                    transcriptStatus.textContent = 'Stopped';
                 }
             };
             
