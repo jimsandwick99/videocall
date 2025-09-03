@@ -407,10 +407,29 @@ function createTwilioEndpoints(app) {
         if (stat.isDirectory()) {
           const twilioPath = path.join(roomPath, 'twilio');
           
-          // Check for transcript files
+          // Check for transcript files (both Whisper and real-time)
           const transcriptPath = path.join(roomPath, 'twilio_transcript.txt');
           const transcriptJsonPath = path.join(roomPath, 'twilio_transcript.json');
-          const hasTranscript = await fs.pathExists(transcriptPath);
+          const realtimeTranscriptPath = path.join(roomPath, 'realtime_transcript.json');
+          
+          const hasWhisperTranscript = await fs.pathExists(transcriptPath);
+          const hasRealtimeTranscript = await fs.pathExists(realtimeTranscriptPath);
+          const hasTranscript = hasWhisperTranscript || hasRealtimeTranscript;
+          
+          // Get real-time transcript details
+          let transcriptEntryCount = 0;
+          let transcriptType = null;
+          if (hasRealtimeTranscript) {
+            try {
+              const rtData = await fs.readJson(realtimeTranscriptPath);
+              transcriptEntryCount = rtData.entries ? rtData.entries.length : 0;
+              transcriptType = hasWhisperTranscript ? 'both' : 'realtime';
+            } catch (e) {
+              console.error(`[RECORDINGS] Error reading realtime transcript for ${roomId}:`, e);
+            }
+          } else if (hasWhisperTranscript) {
+            transcriptType = 'whisper';
+          }
           
           if (await fs.pathExists(twilioPath)) {
             const files = await fs.readdir(twilioPath);
@@ -426,7 +445,10 @@ function createTwilioEndpoints(app) {
                 files: audioFiles,
                 path: `/api/recordings/${roomId}`,
                 hasTranscript,
-                transcriptPath: hasTranscript ? `/api/transcript/${roomId}` : null
+                transcriptType,
+                transcriptEntryCount,
+                transcriptPath: hasTranscript ? `/api/transcript/${roomId}` : null,
+                realtimeTranscriptPath: hasRealtimeTranscript ? `/api/transcript/${roomId}?format=realtime` : null
               });
             }
           }
@@ -479,24 +501,76 @@ function createTwilioEndpoints(app) {
   app.get('/api/transcript/:roomId', async (req, res) => {
     try {
       const { roomId } = req.params;
-      const format = req.query.format || 'text'; // 'text' or 'json'
+      const format = req.query.format || 'text'; // 'text', 'json', or 'realtime'
       
+      // Handle real-time transcript
+      if (format === 'realtime') {
+        const realtimePath = path.join(__dirname, 'recordings', roomId, 'realtime_transcript.json');
+        if (await fs.pathExists(realtimePath)) {
+          const data = await fs.readJson(realtimePath);
+          
+          // Convert to readable format
+          const formattedTranscript = {
+            roomId: data.roomId,
+            startTime: data.startTime,
+            entryCount: data.entries.length,
+            entries: data.entries.map(entry => ({
+              speaker: entry.speaker,
+              text: entry.text,
+              timestamp: new Date(entry.timestamp).toISOString()
+            }))
+          };
+          
+          return res.json(formattedTranscript);
+        } else {
+          return res.status(404).json({
+            success: false,
+            error: 'Real-time transcript not found'
+          });
+        }
+      }
+      
+      // Handle Whisper transcripts
       const filename = format === 'json' ? 'twilio_transcript.json' : 'twilio_transcript.txt';
       const filepath = path.join(__dirname, 'recordings', roomId, filename);
       
+      // If Whisper transcript doesn't exist, try real-time as fallback
       if (!await fs.pathExists(filepath)) {
-        return res.status(404).json({
-          success: false,
-          error: 'Transcript not found'
-        });
-      }
-      
-      if (format === 'json') {
-        const data = await fs.readJson(filepath);
-        res.json(data);
+        const realtimePath = path.join(__dirname, 'recordings', roomId, 'realtime_transcript.json');
+        if (await fs.pathExists(realtimePath)) {
+          const data = await fs.readJson(realtimePath);
+          
+          if (format === 'json') {
+            res.json(data);
+          } else {
+            // Convert real-time transcript to text format
+            let text = `Real-time Transcript for Room ${roomId}\n`;
+            text += `Generated: ${new Date(data.startTime).toISOString()}\n`;
+            text += `Total Entries: ${data.entries.length}\n\n`;
+            text += '='.repeat(60) + '\n\n';
+            
+            data.entries.forEach(entry => {
+              text += `[${new Date(entry.timestamp).toLocaleTimeString()}] ${entry.speaker}:\n`;
+              text += `${entry.text}\n\n`;
+            });
+            
+            res.type('text/plain').send(text);
+          }
+        } else {
+          return res.status(404).json({
+            success: false,
+            error: 'No transcript found (neither Whisper nor real-time)'
+          });
+        }
       } else {
-        const text = await fs.readFile(filepath, 'utf-8');
-        res.type('text/plain').send(text);
+        // Serve Whisper transcript
+        if (format === 'json') {
+          const data = await fs.readJson(filepath);
+          res.json(data);
+        } else {
+          const text = await fs.readFile(filepath, 'utf-8');
+          res.type('text/plain').send(text);
+        }
       }
       
     } catch (error) {

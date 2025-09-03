@@ -16,10 +16,9 @@
     a. how to render
 6. AI Compare Report
     a. how to compare
-
-
+7. Record costs against the users account with small markup
 
 ## To Sell
 1. Allow for other integrations - n8n, etc. to push data to other applications?
-2. White Lavel - allow styling to be configured.
-3. Payment - 
+2. White Lavel - allow styling to be configured
+3. Payment - integration

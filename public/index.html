@@ -465,14 +465,40 @@
                     
                     // Add transcript link if available
                     if (recording.hasTranscript) {
+                        // Determine transcript label based on type
+                        let transcriptLabel = '📝 View Transcript';
+                        let transcriptInfo = '';
+                        
+                        if (recording.transcriptType === 'realtime') {
+                            transcriptLabel = '💬 View Live Transcript';
+                            transcriptInfo = ` (${recording.transcriptEntryCount || 0} entries)`;
+                        } else if (recording.transcriptType === 'both') {
+                            transcriptLabel = '📝 View Full Transcript';
+                            transcriptInfo = ` (AI + Live)`;
+                        } else if (recording.transcriptType === 'whisper') {
+                            transcriptLabel = '🤖 View AI Transcript';
+                        }
+                        
                         filesHtml += `
                             <a href="${recording.transcriptPath}" class="recording-file" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border-color: rgba(16, 185, 129, 0.5);">
-                                📝 View Transcript
-                            </a>
-                            <a href="${recording.transcriptPath}?format=json" class="recording-file" download>
-                                📊 Download JSON
+                                ${transcriptLabel}${transcriptInfo}
                             </a>
                         `;
+                        
+                        // Add real-time transcript link if available
+                        if (recording.realtimeTranscriptPath) {
+                            filesHtml += `
+                                <a href="${recording.realtimeTranscriptPath}" class="recording-file" download>
+                                    📊 Download Live JSON
+                                </a>
+                            `;
+                        } else {
+                            filesHtml += `
+                                <a href="${recording.transcriptPath}?format=json" class="recording-file" download>
+                                    📊 Download JSON
+                                </a>
+                            `;
+                        }
                     }
                     
                     recording.files.forEach(file => {

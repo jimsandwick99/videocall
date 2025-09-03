@@ -1849,12 +1849,19 @@
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout for downloading recordings
                 
+                // Gather all transcript entries before sending
+                console.log('[CLIENT TWILIO] Gathering transcript entries...');
+                console.log('[CLIENT TWILIO] Total transcript entries:', transcriptEntries.length);
+                
                 let response;
                 try {
                     response = await fetch('/api/twilio/stop', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ roomId }),
+                        body: JSON.stringify({ 
+                            roomId,
+                            transcriptEntries: transcriptEntries // Send collected transcripts
+                        }),
                         signal: controller.signal
                     });
                     clearTimeout(timeoutId);

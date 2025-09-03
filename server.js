@@ -356,9 +356,49 @@ io.on('connection', (socket) => {
     });
   });
   
-  // Handle real-time transcript relay
-  socket.on('transcript', (data) => {
-    console.log(`[TRANSCRIPT] Relaying transcript from ${socket.id} in room ${data.roomId}`);
+  // Handle real-time transcript relay AND storage
+  socket.on('transcript', async (data) => {
+    console.log(`[TRANSCRIPT] Received transcript from ${socket.id} in room ${data.roomId}`);
+    console.log(`[TRANSCRIPT] Speaker: ${data.speaker}, Text: ${data.text?.substring(0, 50)}...`);
+    
+    // Store transcript to file system
+    const transcriptDir = path.join(__dirname, 'recordings', data.roomId);
+    const transcriptFile = path.join(transcriptDir, 'realtime_transcript.json');
+    
+    try {
+      // Ensure directory exists
+      await fs.ensureDir(transcriptDir);
+      
+      // Load existing transcript or create new one
+      let transcriptData = {
+        roomId: data.roomId,
+        startTime: null,
+        entries: []
+      };
+      
+      if (await fs.pathExists(transcriptFile)) {
+        transcriptData = await fs.readJson(transcriptFile);
+      } else {
+        transcriptData.startTime = Date.now();
+        console.log(`[TRANSCRIPT] Created new transcript file for room ${data.roomId}`);
+      }
+      
+      // Add new entry
+      transcriptData.entries.push({
+        speaker: data.speaker,
+        text: data.text,
+        timestamp: data.timestamp || Date.now(),
+        from: socket.id
+      });
+      
+      // Save updated transcript
+      await fs.writeJson(transcriptFile, transcriptData, { spaces: 2 });
+      console.log(`[TRANSCRIPT] Saved entry #${transcriptData.entries.length} to file`);
+      
+    } catch (error) {
+      console.error(`[TRANSCRIPT ERROR] Failed to save transcript:`, error);
+    }
+    
     // Relay transcript to other participants in the room
     socket.to(data.roomId).emit('transcript', {
       speaker: data.speaker,
