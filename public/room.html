@@ -502,6 +502,242 @@
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
+        
+        /* Transcript Panel */
+        .transcript-panel {
+            position: fixed;
+            right: 20px;
+            top: 100px;
+            bottom: 110px;
+            width: 380px;
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            display: none;
+            flex-direction: column;
+            overflow: hidden;
+            z-index: 90;
+            transition: transform 0.3s ease, opacity 0.3s ease;
+        }
+        
+        .transcript-panel.active {
+            display: flex;
+        }
+        
+        .transcript-header {
+            padding: 1rem 1.5rem;
+            background: var(--glass-bg);
+            border-bottom: 1px solid var(--glass-border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .transcript-title {
+            font-weight: 600;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .transcript-status {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+        
+        .transcript-status-dot {
+            width: 6px;
+            height: 6px;
+            background: var(--success);
+            border-radius: 50%;
+            animation: pulse 2s ease-in-out infinite;
+        }
+        
+        .transcript-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1rem;
+            scroll-behavior: smooth;
+        }
+        
+        .transcript-content::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        .transcript-content::-webkit-scrollbar-track {
+            background: var(--glass-bg);
+            border-radius: 3px;
+        }
+        
+        .transcript-content::-webkit-scrollbar-thumb {
+            background: var(--glass-border);
+            border-radius: 3px;
+        }
+        
+        .transcript-content::-webkit-scrollbar-thumb:hover {
+            background: var(--text-secondary);
+        }
+        
+        .transcript-entry {
+            margin-bottom: 1rem;
+            padding: 0.75rem;
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 12px;
+            border-left: 3px solid transparent;
+            transition: all 0.3s ease;
+            animation: fadeInUp 0.3s ease;
+        }
+        
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .transcript-entry.local {
+            border-left-color: var(--primary-gradient);
+            background: linear-gradient(90deg, rgba(102, 126, 234, 0.05) 0%, transparent 100%);
+        }
+        
+        .transcript-entry.remote {
+            border-left-color: var(--secondary-gradient);
+            background: linear-gradient(90deg, rgba(240, 147, 251, 0.05) 0%, transparent 100%);
+        }
+        
+        .transcript-speaker {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 0.25rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .transcript-text {
+            font-size: 0.9rem;
+            color: var(--text-primary);
+            line-height: 1.5;
+            word-wrap: break-word;
+        }
+        
+        .transcript-timestamp {
+            font-size: 0.65rem;
+            color: var(--muted);
+            margin-top: 0.25rem;
+            font-variant-numeric: tabular-nums;
+        }
+        
+        .transcript-toggle-btn {
+            position: fixed;
+            right: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 40px;
+            height: 60px;
+            background: var(--glass-bg);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px 0 0 20px;
+            border-right: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            color: var(--text-primary);
+            transition: all 0.3s ease;
+            z-index: 91;
+        }
+        
+        .transcript-toggle-btn:hover {
+            background: var(--primary-gradient);
+            transform: translateY(-50%) translateX(-2px);
+        }
+        
+        .transcript-toggle-btn.panel-open {
+            right: 400px;
+            border-radius: 0 20px 20px 0;
+            border-left: none;
+            border-right: 1px solid var(--glass-border);
+        }
+        
+        .transcript-empty {
+            text-align: center;
+            color: var(--text-secondary);
+            padding: 2rem;
+            font-size: 0.875rem;
+        }
+        
+        .transcript-listening {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.5rem;
+            background: rgba(16, 185, 129, 0.1);
+            border-radius: 10px;
+            margin-bottom: 1rem;
+            animation: pulse 2s ease-in-out infinite;
+        }
+        
+        .transcript-listening-text {
+            color: var(--success);
+            font-size: 0.75rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        /* Adjust main container when transcript panel is open */
+        .main-container.transcript-open {
+            padding-right: 420px;
+        }
+        
+        /* Responsive adjustments */
+        @media (max-width: 1400px) {
+            .transcript-panel {
+                width: 320px;
+            }
+            
+            .transcript-toggle-btn.panel-open {
+                right: 340px;
+            }
+            
+            .main-container.transcript-open {
+                padding-right: 360px;
+            }
+        }
+        
+        @media (max-width: 1024px) {
+            .transcript-panel {
+                width: 100%;
+                right: 0;
+                left: 0;
+                top: auto;
+                bottom: 90px;
+                height: 300px;
+                border-radius: 20px 20px 0 0;
+            }
+            
+            .transcript-toggle-btn {
+                display: none;
+            }
+            
+            .main-container.transcript-open {
+                padding-right: 2rem;
+                padding-bottom: 320px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -518,7 +754,7 @@
     </div>
     
     <!-- Main Container -->
-    <div class="main-container">
+    <div class="main-container" id="mainContainer">
         <div class="video-grid">
             <!-- Local Video -->
             <div class="video-card" id="localVideoCard">
@@ -572,6 +808,28 @@
                     <div class="placeholder-icon">👤</div>
                     <div class="placeholder-text">Waiting for participant...</div>
                 </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Transcript Panel -->
+    <button class="transcript-toggle-btn" id="transcriptToggle" title="Toggle Transcript">
+        <span>💬</span>
+    </button>
+    
+    <div class="transcript-panel" id="transcriptPanel">
+        <div class="transcript-header">
+            <div class="transcript-title">
+                <span>Live Transcript</span>
+            </div>
+            <div class="transcript-status">
+                <div class="transcript-status-dot"></div>
+                <span id="transcriptStatus">Listening</span>
+            </div>
+        </div>
+        <div class="transcript-content" id="transcriptContent">
+            <div class="transcript-empty">
+                Transcript will appear here as you speak...
             </div>
         </div>
     </div>
@@ -1348,6 +1606,248 @@
         
         // Start the application
         initializeMedia();
+        
+        // Real-time Transcript Functionality
+        const transcriptPanel = document.getElementById('transcriptPanel');
+        const transcriptToggle = document.getElementById('transcriptToggle');
+        const transcriptContent = document.getElementById('transcriptContent');
+        const transcriptStatus = document.getElementById('transcriptStatus');
+        const mainContainer = document.getElementById('mainContainer');
+        
+        let isTranscriptOpen = false;
+        let recognition = null;
+        let isTranscribing = false;
+        let transcriptEntries = [];
+        let interimTranscript = '';
+        let currentSpeaker = 'local';
+        
+        // Toggle transcript panel
+        transcriptToggle.addEventListener('click', () => {
+            isTranscriptOpen = !isTranscriptOpen;
+            
+            if (isTranscriptOpen) {
+                transcriptPanel.classList.add('active');
+                transcriptToggle.classList.add('panel-open');
+                mainContainer.classList.add('transcript-open');
+                transcriptToggle.innerHTML = '<span>✕</span>';
+                
+                // Start speech recognition if not already started
+                if (!isTranscribing) {
+                    startSpeechRecognition();
+                }
+            } else {
+                transcriptPanel.classList.remove('active');
+                transcriptToggle.classList.remove('panel-open');
+                mainContainer.classList.remove('transcript-open');
+                transcriptToggle.innerHTML = '<span>💬</span>';
+            }
+        });
+        
+        // Initialize Speech Recognition
+        function startSpeechRecognition() {
+            // Check if browser supports speech recognition
+            if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+                console.warn('Speech recognition not supported in this browser');
+                transcriptStatus.textContent = 'Not supported';
+                addTranscriptEntry('system', 'Speech recognition is not supported in this browser. Try Chrome or Edge.', 'system');
+                return;
+            }
+            
+            const SpeechRecognition = window.webkitSpeechRecognition || window.SpeechRecognition;
+            recognition = new SpeechRecognition();
+            
+            // Configure recognition
+            recognition.continuous = true;
+            recognition.interimResults = true;
+            recognition.lang = 'en-US';
+            recognition.maxAlternatives = 1;
+            
+            // Handle results
+            recognition.onresult = (event) => {
+                let finalTranscript = '';
+                interimTranscript = '';
+                
+                for (let i = event.resultIndex; i < event.results.length; i++) {
+                    const transcript = event.results[i][0].transcript;
+                    
+                    if (event.results[i].isFinal) {
+                        finalTranscript += transcript;
+                    } else {
+                        interimTranscript += transcript;
+                    }
+                }
+                
+                // Add final transcript as an entry
+                if (finalTranscript) {
+                    // Determine speaker (local for now, would need more sophisticated detection for remote)
+                    const speaker = isInterviewer ? 'Interviewer' : 'Interviewee';
+                    addTranscriptEntry(speaker, finalTranscript, 'local');
+                    
+                    // Send transcript to other participant
+                    if (socket && socket.connected) {
+                        socket.emit('transcript', {
+                            roomId: roomId,
+                            speaker: speaker,
+                            text: finalTranscript,
+                            timestamp: Date.now()
+                        });
+                    }
+                }
+                
+                // Update interim display if needed
+                updateInterimTranscript(interimTranscript);
+            };
+            
+            recognition.onstart = () => {
+                isTranscribing = true;
+                transcriptStatus.textContent = 'Listening';
+                console.log('Speech recognition started');
+            };
+            
+            recognition.onerror = (event) => {
+                console.error('Speech recognition error:', event.error);
+                transcriptStatus.textContent = 'Error';
+                
+                if (event.error === 'no-speech') {
+                    // Restart recognition after no speech detected
+                    setTimeout(() => {
+                        if (isTranscriptOpen && recognition) {
+                            recognition.start();
+                        }
+                    }, 1000);
+                } else if (event.error === 'not-allowed') {
+                    addTranscriptEntry('system', 'Microphone permission denied. Please allow microphone access.', 'system');
+                }
+            };
+            
+            recognition.onend = () => {
+                isTranscribing = false;
+                transcriptStatus.textContent = 'Stopped';
+                
+                // Restart if panel is still open
+                if (isTranscriptOpen) {
+                    setTimeout(() => {
+                        if (isTranscriptOpen && recognition) {
+                            try {
+                                recognition.start();
+                            } catch (e) {
+                                console.log('Recognition restart failed:', e);
+                            }
+                        }
+                    }, 100);
+                }
+            };
+            
+            // Start recognition
+            try {
+                recognition.start();
+            } catch (e) {
+                console.error('Failed to start recognition:', e);
+            }
+        }
+        
+        // Add transcript entry to the panel
+        function addTranscriptEntry(speaker, text, type = 'local') {
+            // Remove empty message if it exists
+            const emptyMsg = transcriptContent.querySelector('.transcript-empty');
+            if (emptyMsg) {
+                emptyMsg.remove();
+            }
+            
+            // Remove any existing interim transcript display
+            const existingInterim = transcriptContent.querySelector('.transcript-interim');
+            if (existingInterim) {
+                existingInterim.remove();
+            }
+            
+            // Create entry element
+            const entry = document.createElement('div');
+            entry.className = `transcript-entry ${type}`;
+            
+            const speakerElem = document.createElement('div');
+            speakerElem.className = 'transcript-speaker';
+            speakerElem.textContent = speaker;
+            
+            const textElem = document.createElement('div');
+            textElem.className = 'transcript-text';
+            textElem.textContent = text;
+            
+            const timestamp = document.createElement('div');
+            timestamp.className = 'transcript-timestamp';
+            const time = new Date();
+            timestamp.textContent = time.toLocaleTimeString('en-US', { 
+                hour: '2-digit', 
+                minute: '2-digit', 
+                second: '2-digit' 
+            });
+            
+            entry.appendChild(speakerElem);
+            entry.appendChild(textElem);
+            entry.appendChild(timestamp);
+            
+            transcriptContent.appendChild(entry);
+            
+            // Auto-scroll to bottom
+            transcriptContent.scrollTop = transcriptContent.scrollHeight;
+            
+            // Store entry for later export if needed
+            transcriptEntries.push({
+                speaker,
+                text,
+                timestamp: Date.now(),
+                type
+            });
+        }
+        
+        // Update interim transcript display
+        function updateInterimTranscript(text) {
+            // Remove existing interim display
+            let interimElem = transcriptContent.querySelector('.transcript-interim');
+            
+            if (text) {
+                if (!interimElem) {
+                    interimElem = document.createElement('div');
+                    interimElem.className = 'transcript-listening';
+                    transcriptContent.appendChild(interimElem);
+                }
+                
+                interimElem.innerHTML = `
+                    <div class="transcript-listening-text">
+                        <span>🎤</span>
+                        <span>${text}</span>
+                    </div>
+                `;
+                
+                // Auto-scroll to bottom
+                transcriptContent.scrollTop = transcriptContent.scrollHeight;
+            } else if (interimElem) {
+                interimElem.remove();
+            }
+        }
+        
+        // Handle incoming transcripts from remote participant
+        socket.on('transcript', (data) => {
+            if (data.speaker !== (isInterviewer ? 'Interviewer' : 'Interviewee')) {
+                // This is from the remote participant
+                addTranscriptEntry(data.speaker, data.text, 'remote');
+            }
+        });
+        
+        // Stop speech recognition when call ends
+        window.addEventListener('beforeunload', () => {
+            if (recognition) {
+                recognition.stop();
+            }
+        });
+        
+        // Also stop when ending call
+        const originalEndCall = document.getElementById('endCall').onclick;
+        document.getElementById('endCall').onclick = function() {
+            if (recognition) {
+                recognition.stop();
+            }
+            if (originalEndCall) originalEndCall.apply(this, arguments);
+        };
     </script>
 </body>
 </html>

@@ -356,6 +356,18 @@ io.on('connection', (socket) => {
     });
   });
   
+  // Handle real-time transcript relay
+  socket.on('transcript', (data) => {
+    console.log(`[TRANSCRIPT] Relaying transcript from ${socket.id} in room ${data.roomId}`);
+    // Relay transcript to other participants in the room
+    socket.to(data.roomId).emit('transcript', {
+      speaker: data.speaker,
+      text: data.text,
+      timestamp: data.timestamp,
+      from: socket.id
+    });
+  });
+  
   socket.on('disconnect', () => {
     console.log(`User disconnected: ${socket.id} from room ${currentRoom}`);
     if (currentRoom) {
