@@ -72,40 +72,114 @@
             border-radius: 20px;
             margin-bottom: 2rem;
             box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            position: relative;
+        }
+        
+        .header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 1.5rem;
+        }
+        
+        .header-actions {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+        
+        .action-button {
+            padding: 0.5rem 1rem;
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            color: var(--text-primary);
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .action-button:hover {
+            background: rgba(255, 255, 255, 0.08);
+            transform: translateY(-2px);
+        }
+        
+        .action-button.primary {
+            background: var(--primary-gradient);
+            border: none;
+            color: white;
+        }
+        
+        .action-button.primary:hover {
+            box-shadow: 0 5px 20px rgba(79, 125, 243, 0.3);
         }
         
         h1 {
             font-size: 2rem;
-            font-weight: 400;
-            margin-bottom: 1rem;
+            font-weight: 500;
             letter-spacing: 0.5px;
+            background: linear-gradient(135deg, #f0f0f0 0%, #b8c1d1 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        
+        .header-icon {
+            width: 48px;
+            height: 48px;
+            background: var(--primary-gradient);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            flex-shrink: 0;
         }
         
         .metadata {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 2rem;
-            margin-top: 1.5rem;
-            padding-top: 1.5rem;
-            border-top: 1px solid var(--glass-border);
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1.5rem;
+            padding: 1.5rem;
+            background: var(--glass-bg);
+            border-radius: 15px;
+            border: 1px solid var(--glass-border);
         }
         
         .metadata-item {
             display: flex;
             flex-direction: column;
+            padding: 0.75rem;
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            transition: all 0.3s;
+        }
+        
+        .metadata-item:hover {
+            background: rgba(255, 255, 255, 0.04);
+            transform: translateY(-2px);
         }
         
         .metadata-label {
             color: var(--text-secondary);
-            font-size: 0.85rem;
+            font-size: 0.75rem;
             text-transform: uppercase;
-            letter-spacing: 0.5px;
-            margin-bottom: 0.25rem;
+            letter-spacing: 1px;
+            margin-bottom: 0.5rem;
+            opacity: 0.7;
         }
         
         .metadata-value {
-            font-size: 1.1rem;
+            font-size: 1.25rem;
             color: var(--text-primary);
+            font-weight: 500;
         }
         
         .transcript-container {
@@ -115,6 +189,43 @@
             padding: 2rem;
             border-radius: 20px;
             box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            min-height: 400px;
+        }
+        
+        .transcript-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 1.5rem;
+            margin-bottom: 1.5rem;
+            border-bottom: 1px solid var(--glass-border);
+        }
+        
+        .transcript-title {
+            font-size: 1.2rem;
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+        
+        .transcript-controls {
+            display: flex;
+            gap: 0.5rem;
+        }
+        
+        .control-button {
+            padding: 0.4rem 0.8rem;
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            color: var(--text-secondary);
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: all 0.3s;
+        }
+        
+        .control-button:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: var(--text-primary);
         }
         
         .transcript-entry {
@@ -244,6 +355,61 @@
             border-color: rgba(79, 125, 243, 0.3);
             color: #4f7df3;
         }
+        
+        /* Print styles for better printed output */
+        @media print {
+            body {
+                background: white;
+                color: black;
+            }
+            
+            body::before {
+                display: none;
+            }
+            
+            .back-button,
+            .header-actions,
+            .transcript-controls {
+                display: none !important;
+            }
+            
+            .header,
+            .transcript-container {
+                background: white;
+                border: 1px solid #ddd;
+                box-shadow: none;
+            }
+            
+            .metadata {
+                background: #f9f9f9;
+                border: 1px solid #ddd;
+            }
+            
+            .metadata-item {
+                background: white;
+                border: 1px solid #eee;
+            }
+            
+            .transcript-entry {
+                background: white;
+                border: 1px solid #eee;
+                page-break-inside: avoid;
+            }
+            
+            .speaker {
+                color: black;
+                font-weight: bold;
+            }
+            
+            .text {
+                color: black;
+            }
+            
+            h1 {
+                color: black;
+                -webkit-text-fill-color: black;
+            }
+        }
     </style>
 </head>
 <body>
@@ -253,16 +419,50 @@
         </a>
         
         <div class="header">
-            <h1>Interview Transcript
-                <span id="transcriptType" class="transcript-type-badge"></span>
-            </h1>
+            <div class="header-top">
+                <div>
+                    <h1>
+                        <div class="header-icon">📝</div>
+                        Interview Transcript
+                        <span id="transcriptType" class="transcript-type-badge"></span>
+                    </h1>
+                </div>
+                <div class="header-actions">
+                    <button class="action-button" onclick="window.print()" title="Print transcript">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="6 9 6 2 18 2 18 9"></polyline>
+                            <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+                            <rect x="6" y="14" width="12" height="8"></rect>
+                        </svg>
+                        Print
+                    </button>
+                    <button class="action-button" onclick="exportTranscript()" title="Export as text">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="7 10 12 15 17 10"></polyline>
+                            <line x1="12" y1="15" x2="12" y2="3"></line>
+                        </svg>
+                        Export
+                    </button>
+                    <button class="action-button primary" onclick="shareTranscript()" title="Share transcript">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="18" cy="5" r="3"></circle>
+                            <circle cx="6" cy="12" r="3"></circle>
+                            <circle cx="18" cy="19" r="3"></circle>
+                            <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+                            <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+                        </svg>
+                        Share
+                    </button>
+                </div>
+            </div>
             <div class="metadata">
                 <div class="metadata-item">
-                    <span class="metadata-label">Room ID</span>
+                    <span class="metadata-label">Session ID</span>
                     <span class="metadata-value" id="roomId">Loading...</span>
                 </div>
                 <div class="metadata-item">
-                    <span class="metadata-label">Date</span>
+                    <span class="metadata-label">Date & Time</span>
                     <span class="metadata-value" id="date">Loading...</span>
                 </div>
                 <div class="metadata-item">
@@ -270,7 +470,7 @@
                     <span class="metadata-value" id="duration">Loading...</span>
                 </div>
                 <div class="metadata-item">
-                    <span class="metadata-label">Entries</span>
+                    <span class="metadata-label">Total Entries</span>
                     <span class="metadata-value" id="entryCount">Loading...</span>
                 </div>
             </div>
@@ -448,6 +648,66 @@
             const mins = Math.floor(seconds / 60);
             const secs = Math.floor(seconds % 60);
             return `${mins}:${secs.toString().padStart(2, '0')}`;
+        }
+        
+        // Export transcript as text file
+        function exportTranscript() {
+            const entries = document.querySelectorAll('.transcript-entry');
+            let text = 'Interview Transcript\n';
+            text += '=' .repeat(50) + '\n\n';
+            
+            const roomId = document.getElementById('roomId').textContent;
+            const date = document.getElementById('date').textContent;
+            const duration = document.getElementById('duration').textContent;
+            
+            text += `Session ID: ${roomId}\n`;
+            text += `Date: ${date}\n`;
+            text += `Duration: ${duration}\n`;
+            text += '\n' + '=' .repeat(50) + '\n\n';
+            
+            entries.forEach(entry => {
+                const speaker = entry.querySelector('.speaker').textContent.replace(/[IC]/, '').trim();
+                const timestamp = entry.querySelector('.timestamp').textContent;
+                const content = entry.querySelector('.text').textContent;
+                
+                text += `[${timestamp}] ${speaker}:\n${content}\n\n`;
+            });
+            
+            // Create and download file
+            const blob = new Blob([text], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `transcript-${roomId}.txt`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+        
+        // Share transcript
+        async function shareTranscript() {
+            const url = window.location.href;
+            const roomId = document.getElementById('roomId').textContent;
+            
+            if (navigator.share) {
+                try {
+                    await navigator.share({
+                        title: 'Interview Transcript',
+                        text: `View the interview transcript for session ${roomId}`,
+                        url: url
+                    });
+                } catch (err) {
+                    // User cancelled or error
+                    if (err.name !== 'AbortError') {
+                        // Fallback to copying URL
+                        navigator.clipboard.writeText(url);
+                        alert('Link copied to clipboard!');
+                    }
+                }
+            } else {
+                // Fallback for browsers without share API
+                navigator.clipboard.writeText(url);
+                alert('Link copied to clipboard!');
+            }
         }
         
         // Load transcript on page load

@@ -181,7 +181,6 @@
         }
         
         .copy-button {
-            margin-top: 1rem;
             background: linear-gradient(135deg, #10b981 0%, #059669 100%);
         }
         
@@ -191,8 +190,8 @@
         
         .share-dropdown {
             position: relative;
-            display: inline-block;
-            flex: 1;
+            display: flex;
+            align-items: stretch;
         }
         
         .share-button {
@@ -201,6 +200,8 @@
             align-items: center;
             justify-content: center;
             gap: 0.5rem;
+            padding: 1rem 1.5rem;
+            white-space: nowrap;
         }
         
         .share-button:hover {
@@ -508,7 +509,7 @@
             <div>
                 <p class="section-label">Share this link with the candidate</p>
                 <a href="#" class="link-text" id="roomLink" target="_blank"></a>
-                <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+                <div style="display: flex; gap: 0.5rem; margin-top: 1rem; align-items: stretch;">
                     <button class="button copy-button" id="copyLink" style="flex: 1;">Copy Candidate Link</button>
                     <div class="share-dropdown">
                         <button class="button share-button" id="shareButton">
