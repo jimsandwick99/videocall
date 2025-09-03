@@ -91,6 +91,11 @@ app.get('/transcript/:roomId', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'transcript-viewer.html'));
 });
 
+// Serve transcripts listing page
+app.get('/transcripts', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'transcripts.html'));
+});
+
 // Handle chunk uploads - DEPRECATED (using Twilio recording now)
 /*
 app.post('/api/upload-chunk', upload.single('audio'), async (req, res) => {

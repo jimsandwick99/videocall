@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interview Transcripts</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        :root {
+            --primary: #4f7df3;
+            --primary-dark: #3a5fc7;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --dark: #0f172a;
+            --light: #f8fafc;
+            --gray: #64748b;
+            --glass-bg: rgba(255, 255, 255, 0.03);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --card-bg: rgba(255, 255, 255, 0.02);
+            --text-primary: #e2e8f0;
+            --text-secondary: #94a3b8;
+            --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 100%);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 2rem;
+        }
+        
+        .container {
+            width: 100%;
+            max-width: 1200px;
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            padding: 2.5rem;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 2.5rem;
+        }
+        
+        h1 {
+            font-size: 2.5rem;
+            background: var(--primary-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 0.5rem;
+        }
+        
+        .subtitle {
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+        }
+        
+        .controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+        
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--text-primary);
+            text-decoration: none;
+            padding: 0.75rem 1.5rem;
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 10px;
+            transition: all 0.3s;
+        }
+        
+        .back-link:hover {
+            background: rgba(79, 125, 243, 0.1);
+            border-color: var(--primary);
+        }
+        
+        .refresh-btn {
+            padding: 0.75rem 1.5rem;
+            background: var(--primary-gradient);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: all 0.3s;
+        }
+        
+        .refresh-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(79, 125, 243, 0.3);
+        }
+        
+        .transcripts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 1.5rem;
+        }
+        
+        .transcript-card {
+            background: var(--card-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 15px;
+            padding: 1.5rem;
+            transition: all 0.3s;
+        }
+        
+        .transcript-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            border-color: rgba(79, 125, 243, 0.3);
+        }
+        
+        .transcript-header {
+            margin-bottom: 1rem;
+        }
+        
+        .transcript-date {
+            font-size: 1.1rem;
+            color: var(--text-primary);
+            margin-bottom: 0.5rem;
+        }
+        
+        .transcript-id {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            font-family: 'Courier New', monospace;
+        }
+        
+        .transcript-info {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+        
+        .info-row {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+        
+        .transcript-type {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            padding: 0.25rem 0.75rem;
+            background: rgba(79, 125, 243, 0.1);
+            border: 1px solid rgba(79, 125, 243, 0.2);
+            border-radius: 20px;
+            font-size: 0.85rem;
+            color: #93bbff;
+        }
+        
+        .transcript-type.whisper {
+            background: rgba(16, 185, 129, 0.1);
+            border-color: rgba(16, 185, 129, 0.2);
+            color: #6ee7b7;
+        }
+        
+        .transcript-actions {
+            display: flex;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+        }
+        
+        .action-btn {
+            flex: 1;
+            min-width: 120px;
+            padding: 0.75rem 1rem;
+            background: var(--glass-bg);
+            color: var(--text-primary);
+            border: 1px solid var(--glass-border);
+            border-radius: 8px;
+            text-decoration: none;
+            text-align: center;
+            font-size: 0.9rem;
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+        
+        .action-btn.primary {
+            background: var(--primary-gradient);
+            border: none;
+            color: white;
+        }
+        
+        .action-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+        
+        .no-transcripts {
+            text-align: center;
+            padding: 4rem 2rem;
+            color: var(--text-secondary);
+        }
+        
+        .no-transcripts h2 {
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+            color: var(--text-primary);
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 4rem;
+            color: var(--text-secondary);
+        }
+        
+        .error {
+            text-align: center;
+            padding: 2rem;
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            border-radius: 10px;
+            color: #fca5a5;
+        }
+        
+        @media (max-width: 768px) {
+            .container {
+                padding: 1.5rem;
+            }
+            
+            h1 {
+                font-size: 2rem;
+            }
+            
+            .transcripts-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📝 Interview Transcripts</h1>
+            <p class="subtitle">View and manage all your interview transcripts</p>
+        </div>
+        
+        <div class="controls">
+            <a href="/" class="back-link">
+                ← Back to Home
+            </a>
+            <button class="refresh-btn" onclick="loadTranscripts()">
+                🔄 Refresh
+            </button>
+        </div>
+        
+        <div id="transcriptsList" class="transcripts-grid">
+            <div class="loading">Loading transcripts...</div>
+        </div>
+    </div>
+    
+    <script>
+        async function loadTranscripts() {
+            const container = document.getElementById('transcriptsList');
+            container.innerHTML = '<div class="loading">Loading transcripts...</div>';
+            
+            try {
+                const response = await fetch('/api/recordings');
+                const data = await response.json();
+                
+                if (!data.success) {
+                    throw new Error(data.error || 'Failed to load transcripts');
+                }
+                
+                // Filter to only show recordings with transcripts
+                const transcripts = data.recordings.filter(r => r.hasTranscript);
+                
+                if (transcripts.length === 0) {
+                    container.innerHTML = `
+                        <div class="no-transcripts">
+                            <h2>No Transcripts Available</h2>
+                            <p>Interview transcripts will appear here after you complete recorded interviews.</p>
+                            <p style="margin-top: 1rem;">
+                                <a href="/" class="action-btn primary" style="display: inline-block;">
+                                    Create New Interview
+                                </a>
+                            </p>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                // Sort by date (newest first)
+                transcripts.sort((a, b) => new Date(b.date) - new Date(a.date));
+                
+                container.innerHTML = transcripts.map(recording => {
+                    const date = new Date(recording.date);
+                    const roomId = recording.roomId;
+                    
+                    // Format transcript type
+                    let typeLabel = '';
+                    let typeClass = '';
+                    if (recording.transcriptType === 'both') {
+                        typeLabel = '📄 Full Transcript';
+                        typeClass = 'whisper';
+                    } else if (recording.transcriptType === 'whisper') {
+                        typeLabel = '📄 Whisper Transcript';
+                        typeClass = 'whisper';
+                    } else if (recording.transcriptType === 'realtime') {
+                        typeLabel = '💬 Real-time Transcript';
+                        typeClass = '';
+                    }
+                    
+                    return `
+                        <div class="transcript-card">
+                            <div class="transcript-header">
+                                <div class="transcript-date">
+                                    ${date.toLocaleDateString()} at ${date.toLocaleTimeString()}
+                                </div>
+                                <div class="transcript-id">
+                                    Room: ${roomId.substring(0, 8)}...
+                                </div>
+                            </div>
+                            
+                            <div class="transcript-info">
+                                <div class="info-row">
+                                    <span class="transcript-type ${typeClass}">
+                                        ${typeLabel}
+                                    </span>
+                                </div>
+                                ${recording.transcriptEntryCount ? `
+                                    <div class="info-row">
+                                        📝 ${recording.transcriptEntryCount} entries
+                                    </div>
+                                ` : ''}
+                                ${recording.files && recording.files.length > 0 ? `
+                                    <div class="info-row">
+                                        🎤 ${recording.files.length} audio ${recording.files.length === 1 ? 'file' : 'files'}
+                                    </div>
+                                ` : ''}
+                            </div>
+                            
+                            <div class="transcript-actions">
+                                <a href="/transcript/${roomId}" class="action-btn primary" target="_blank">
+                                    View Transcript
+                                </a>
+                                ${recording.files && recording.files.length > 0 ? `
+                                    <button class="action-btn" onclick="downloadRecording('${roomId}')">
+                                        Download Audio
+                                    </button>
+                                ` : ''}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+                
+            } catch (error) {
+                console.error('Error loading transcripts:', error);
+                container.innerHTML = `
+                    <div class="error">
+                        Error loading transcripts: ${error.message}
+                    </div>
+                `;
+            }
+        }
+        
+        async function downloadRecording(roomId) {
+            try {
+                const link = document.createElement('a');
+                link.href = `/api/download/${roomId}`;
+                link.download = `recording-${roomId}.zip`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            } catch (error) {
+                console.error('Error downloading recording:', error);
+                alert('Failed to download recording: ' + error.message);
+            }
+        }
+        
+        // Load transcripts on page load
+        loadTranscripts();
+    </script>
+</body>
+</html>

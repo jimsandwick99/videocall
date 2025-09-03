@@ -542,12 +542,26 @@
         </div>
         
         <div class="recordings-section">
-            <div class="recordings-title">
-                <span>📹 Recordings</span>
-                <button class="refresh-btn" id="refreshRecordings">Refresh</button>
-            </div>
-            <div id="recordingsList" class="recordings-list">
-                <div class="loading">Loading recordings...</div>
+            <div style="text-align: center; padding: 1rem 0;">
+                <a href="/transcripts" style="
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 0.75rem;
+                    padding: 1rem 2rem;
+                    background: linear-gradient(135deg, rgba(79, 125, 243, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+                    border: 1px solid rgba(79, 125, 243, 0.3);
+                    border-radius: 12px;
+                    color: #e2e8f0;
+                    text-decoration: none;
+                    font-size: 1.1rem;
+                    font-weight: 500;
+                    transition: all 0.3s ease;
+                    backdrop-filter: blur(10px);
+                " onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 8px 20px rgba(79, 125, 243, 0.25)'; this.style.background='linear-gradient(135deg, rgba(79, 125, 243, 0.15) 0%, rgba(118, 75, 162, 0.15) 100%)'" 
+                   onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none'; this.style.background='linear-gradient(135deg, rgba(79, 125, 243, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)'">
+                    <span style="font-size: 1.3rem;">📝</span>
+                    <span>View All Interview Transcripts</span>
+                </a>
             </div>
         </div>
     </div>
@@ -639,194 +653,8 @@
             shareMenu.classList.remove('active');
         });
         
-        // Recordings functionality
-        const recordingsList = document.getElementById('recordingsList');
-        const refreshBtn = document.getElementById('refreshRecordings');
+        // Removed recordings functionality - now handled by separate transcripts page
         
-        async function loadRecordings() {
-            recordingsList.innerHTML = '<div class="loading">Loading recordings...</div>';
-            
-            try {
-                const response = await fetch('/api/recordings');
-                const data = await response.json();
-                
-                if (!data.success) {
-                    throw new Error(data.error || 'Failed to load recordings');
-                }
-                
-                if (data.recordings.length === 0) {
-                    recordingsList.innerHTML = '<div class="no-recordings">No recordings available yet. Recordings will appear here after you complete an interview.</div>';
-                    return;
-                }
-                
-                recordingsList.innerHTML = '';
-                
-                data.recordings.forEach(async (recording) => {
-                    const recordingEl = document.createElement('div');
-                    recordingEl.className = 'recording-item';
-                    
-                    const date = new Date(recording.date);
-                    const dateStr = date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
-                    
-                    let filesHtml = '';
-                    
-                    // Add transcript link if available
-                    if (recording.hasTranscript) {
-                        // Determine transcript label based on type
-                        let transcriptLabel = '📝 View Transcript';
-                        let transcriptInfo = '';
-                        
-                        if (recording.transcriptType === 'realtime') {
-                            transcriptLabel = '💬 View Live Transcript';
-                            transcriptInfo = ` (${recording.transcriptEntryCount || 0} entries)`;
-                        } else if (recording.transcriptType === 'both') {
-                            transcriptLabel = '📝 View Full Transcript';
-                            transcriptInfo = ` (AI + Live)`;
-                        } else if (recording.transcriptType === 'whisper') {
-                            transcriptLabel = '🤖 View AI Transcript';
-                        }
-                        
-                        // Use the new transcript viewer page
-                        filesHtml += `
-                            <a href="/transcript/${recording.roomId}" class="recording-file" target="_blank" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border-color: rgba(16, 185, 129, 0.5);">
-                                ${transcriptLabel}${transcriptInfo}
-                            </a>
-                        `;
-                        
-                        // Add download links
-                        if (recording.realtimeTranscriptPath) {
-                            filesHtml += `
-                                <a href="${recording.realtimeTranscriptPath}" class="recording-file" download>
-                                    📊 Download Live JSON
-                                </a>
-                            `;
-                        } else {
-                            filesHtml += `
-                                <a href="${recording.transcriptPath}?format=json" class="recording-file" download>
-                                    📊 Download JSON
-                                </a>
-                            `;
-                        }
-                    }
-                    
-                    recording.files.forEach(file => {
-                        const displayName = file.replace(/_/g, ' ').replace(/\.[^/.]+$/, '');
-                        filesHtml += `
-                            <a href="${recording.path}/${file}" class="recording-file" download>
-                                🎵 ${displayName}
-                            </a>
-                        `;
-                    });
-                    
-                    // Create unique ID for transcript preview
-                    const previewId = `transcript-preview-${recording.roomId}`;
-                    
-                    recordingEl.innerHTML = `
-                        <div class="recording-header">
-                            <div class="recording-room">
-                                Room: ${recording.roomId.substring(0, 8)}...
-                                ${recording.hasTranscript ? '<span style="color: #10b981; margin-left: 10px; opacity: 0.9;">✓ Transcribed</span>' : ''}
-                            </div>
-                            <div class="recording-date">${dateStr}</div>
-                        </div>
-                        <div class="recording-files">
-                            ${filesHtml}
-                        </div>
-                        <div id="${previewId}" class="transcript-preview">
-                            <div class="transcript-preview-header">
-                                <span>📝 Transcript Preview</span>
-                            </div>
-                            <div class="transcript-preview-content">
-                                <div class="loading">Loading preview...</div>
-                            </div>
-                        </div>
-                    `;
-                    
-                    recordingsList.appendChild(recordingEl);
-                    
-                    // Load transcript preview if available
-                    if (recording.hasTranscript) {
-                        loadTranscriptPreview(recording.roomId, previewId);
-                    }
-                });
-                
-            } catch (error) {
-                console.error('Error loading recordings:', error);
-                recordingsList.innerHTML = '<div class="no-recordings">Error loading recordings. Please try again.</div>';
-            }
-        }
-        
-        async function loadTranscriptPreview(roomId, previewId) {
-            const previewEl = document.getElementById(previewId);
-            if (!previewEl) return;
-            
-            try {
-                // Try to load transcript (prefer realtime, fallback to whisper)
-                let response = await fetch(`/api/transcript/${roomId}?format=realtime`);
-                let isRealtime = true;
-                
-                if (!response.ok) {
-                    // Try whisper transcript
-                    response = await fetch(`/api/transcript/${roomId}?format=json`);
-                    isRealtime = false;
-                    
-                    if (!response.ok) {
-                        previewEl.style.display = 'none';
-                        return;
-                    }
-                }
-                
-                const data = await response.json();
-                let previewContent = '';
-                let entriesToShow = [];
-                
-                if (isRealtime || data.entries) {
-                    // Real-time transcript
-                    entriesToShow = (data.entries || []).slice(0, 3);
-                    entriesToShow.forEach(entry => {
-                        previewContent += `
-                            <div class="transcript-entry-preview">
-                                <span class="transcript-speaker">${entry.speaker}:</span>
-                                ${entry.text.substring(0, 150)}${entry.text.length > 150 ? '...' : ''}
-                            </div>
-                        `;
-                    });
-                } else if (data.merged) {
-                    // Whisper transcript
-                    entriesToShow = data.merged.slice(0, 3);
-                    entriesToShow.forEach(segment => {
-                        previewContent += `
-                            <div class="transcript-entry-preview">
-                                <span class="transcript-speaker">${segment.speaker}:</span>
-                                ${segment.text.substring(0, 150)}${segment.text.length > 150 ? '...' : ''}
-                            </div>
-                        `;
-                    });
-                }
-                
-                if (previewContent) {
-                    previewContent += `
-                        <a href="/transcript/${roomId}" target="_blank" class="view-full-transcript">
-                            View Full Transcript →
-                        </a>
-                    `;
-                    
-                    previewEl.querySelector('.transcript-preview-content').innerHTML = previewContent;
-                    previewEl.classList.add('active');
-                } else {
-                    previewEl.style.display = 'none';
-                }
-                
-            } catch (error) {
-                console.error('Error loading transcript preview:', error);
-                previewEl.style.display = 'none';
-            }
-        }
-        
-        refreshBtn.addEventListener('click', loadRecordings);
-        
-        // Load recordings on page load
-        loadRecordings();
     </script>
 </body>
 </html>

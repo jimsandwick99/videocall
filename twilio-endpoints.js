@@ -26,6 +26,108 @@ function createTwilioEndpoints(app) {
 
   // Store active Twilio rooms
   const twilioRooms = new Map();
+  
+  // Helper function to download recordings with retries
+  async function downloadRecordingsWithRetry(roomId, maxRetries = 3, delay = 5000) {
+    const roomInfo = twilioRooms.get(roomId);
+    if (!roomInfo) {
+      console.error('[TWILIO DOWNLOAD] Room not found:', roomId);
+      return { success: false, error: 'Room not found', recordings: [] };
+    }
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      console.log(`[TWILIO DOWNLOAD] Attempt ${attempt}/${maxRetries} for room ${roomId}`);
+      
+      try {
+        // Try to get recordings
+        const recordings = await twilioClient.video.v1.rooms(roomInfo.twilioRoomSid)
+          .recordings
+          .list();
+        
+        console.log(`[TWILIO DOWNLOAD] Found ${recordings.length} recordings`);
+        
+        if (recordings.length === 0 && attempt < maxRetries) {
+          console.log(`[TWILIO DOWNLOAD] No recordings yet, waiting ${delay/1000} seconds...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+        
+        if (recordings.length === 0) {
+          console.log('[TWILIO DOWNLOAD] No recordings found after all retries');
+          return { success: true, recordings: [], message: 'No recordings found' };
+        }
+        
+        // Get participants
+        const participants = await twilioClient.video.v1.rooms(roomInfo.twilioRoomSid)
+          .participants
+          .list();
+        
+        // Download recordings
+        const recordingDir = path.join(__dirname, 'recordings', roomId, 'twilio');
+        await fs.ensureDir(recordingDir);
+        
+        const downloadedFiles = [];
+        
+        for (const recording of recordings) {
+          const participant = participants.find(p => 
+            recording.groupingSids?.participant_sid === p.sid
+          );
+          
+          const identity = participant?.identity || 'unknown';
+          const filename = `${identity}_${recording.trackName || 'track'}_${recording.sid}.${recording.codec || 'mka'}`;
+          const filepath = path.join(recordingDir, filename);
+          
+          console.log(`[TWILIO DOWNLOAD] Downloading: ${filename}`);
+          
+          const mediaUrl = recording.links.media.startsWith('http') 
+            ? recording.links.media 
+            : `https://video.twilio.com${recording.links.media}`;
+          
+          const response = await axios({
+            method: 'GET',
+            url: mediaUrl,
+            responseType: 'stream',
+            auth: {
+              username: process.env.TWILIO_ACCOUNT_SID,
+              password: process.env.TWILIO_AUTH_TOKEN
+            }
+          });
+          
+          const writer = fs.createWriteStream(filepath);
+          response.data.pipe(writer);
+          
+          await new Promise((resolve, reject) => {
+            writer.on('finish', resolve);
+            writer.on('error', reject);
+          });
+          
+          downloadedFiles.push({
+            filename,
+            filepath,
+            identity,
+            trackName: recording.trackName,
+            codec: recording.codec,
+            duration: recording.duration,
+            size: recording.size
+          });
+        }
+        
+        console.log(`[TWILIO DOWNLOAD] Successfully downloaded ${downloadedFiles.length} files`);
+        return { success: true, recordings: downloadedFiles };
+        
+      } catch (error) {
+        console.error(`[TWILIO DOWNLOAD] Attempt ${attempt} failed:`, error.message);
+        
+        if (attempt < maxRetries) {
+          console.log(`[TWILIO DOWNLOAD] Waiting ${delay/1000} seconds before retry...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        } else {
+          console.error('[TWILIO DOWNLOAD] All attempts failed');
+          return { success: false, error: error.message, recordings: [] };
+        }
+      }
+    }
+  }
 
   // Start Twilio recording
   app.post('/api/twilio/start', async (req, res) => {
@@ -384,6 +486,50 @@ function createTwilioEndpoints(app) {
       roomName: roomInfo.twilioRoomName,
       duration: Math.floor((Date.now() - roomInfo.startTime) / 1000)
     });
+  });
+  
+  // Manual endpoint to download recordings (useful when webhooks fail due to ngrok URL changes)
+  app.post('/api/twilio/download-recordings/:roomId', async (req, res) => {
+    const { roomId } = req.params;
+    
+    console.log('[TWILIO MANUAL DOWNLOAD] ========================================');
+    console.log('[TWILIO MANUAL DOWNLOAD] Manual download requested for room:', roomId);
+    
+    const roomInfo = twilioRooms.get(roomId);
+    if (!roomInfo) {
+      console.error('[TWILIO MANUAL DOWNLOAD] Room not found in memory');
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Room not found in memory. Room may have been created before server restart.' 
+      });
+    }
+    
+    try {
+      const result = await downloadRecordingsWithRetry(roomId, 5, 8000);
+      
+      if (result.success) {
+        console.log('[TWILIO MANUAL DOWNLOAD] Success! Downloaded', result.recordings.length, 'files');
+        res.json({
+          success: true,
+          message: `Downloaded ${result.recordings.length} recordings`,
+          recordings: result.recordings
+        });
+      } else {
+        console.error('[TWILIO MANUAL DOWNLOAD] Failed:', result.error);
+        res.status(500).json({
+          success: false,
+          error: result.error || 'Failed to download recordings'
+        });
+      }
+    } catch (error) {
+      console.error('[TWILIO MANUAL DOWNLOAD ERROR]', error);
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    } finally {
+      console.log('[TWILIO MANUAL DOWNLOAD] ========================================');
+    }
   });
 
   // List all recordings
