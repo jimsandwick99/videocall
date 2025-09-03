@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transcript Viewer</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='80' font-size='80'>📝</text></svg>">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        :root {
+            --primary-gradient: linear-gradient(135deg, #4f7df3 0%, #667eea 100%);
+            --secondary-gradient: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+            --dark-bg: #0f1419;
+            --card-bg: rgba(22, 27, 34, 0.85);
+            --glass-bg: rgba(255, 255, 255, 0.03);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --text-primary: #f0f0f0;
+            --text-secondary: #b8c1d1;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --muted: #6b7280;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: var(--dark-bg);
+            min-height: 100vh;
+            color: var(--text-primary);
+            line-height: 1.6;
+            padding: 2rem 1rem;
+        }
+        
+        /* Animated background */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at 20% 50%, rgba(79, 125, 243, 0.08) 0%, transparent 50%),
+                        radial-gradient(circle at 80% 80%, rgba(102, 126, 234, 0.06) 0%, transparent 50%),
+                        radial-gradient(circle at 40% 20%, rgba(72, 187, 120, 0.04) 0%, transparent 50%);
+            pointer-events: none;
+            animation: float 20s ease-in-out infinite;
+        }
+        
+        @keyframes float {
+            0%, 100% { transform: translate(0, 0) rotate(0deg); }
+            33% { transform: translate(-20px, -20px) rotate(1deg); }
+            66% { transform: translate(20px, -10px) rotate(-1deg); }
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            position: relative;
+            z-index: 1;
+        }
+        
+        .header {
+            background: var(--card-bg);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            padding: 2rem;
+            border-radius: 20px;
+            margin-bottom: 2rem;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+        
+        h1 {
+            font-size: 2rem;
+            font-weight: 400;
+            margin-bottom: 1rem;
+            letter-spacing: 0.5px;
+        }
+        
+        .metadata {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 2rem;
+            margin-top: 1.5rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid var(--glass-border);
+        }
+        
+        .metadata-item {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .metadata-label {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 0.25rem;
+        }
+        
+        .metadata-value {
+            font-size: 1.1rem;
+            color: var(--text-primary);
+        }
+        
+        .transcript-container {
+            background: var(--card-bg);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            padding: 2rem;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+        
+        .transcript-entry {
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s;
+        }
+        
+        .transcript-entry:hover {
+            background: rgba(255, 255, 255, 0.06);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(0,0,0,0.2);
+        }
+        
+        .speaker {
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .speaker.interviewer {
+            color: #4f7df3;
+        }
+        
+        .speaker.interviewee, .speaker.candidate {
+            color: #10b981;
+        }
+        
+        .speaker-icon {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+            color: white;
+        }
+        
+        .speaker.interviewer .speaker-icon {
+            background: linear-gradient(135deg, #4f7df3 0%, #667eea 100%);
+        }
+        
+        .speaker.interviewee .speaker-icon, .speaker.candidate .speaker-icon {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        }
+        
+        .timestamp {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            margin-left: auto;
+            font-family: 'Courier New', monospace;
+        }
+        
+        .text {
+            color: var(--text-primary);
+            line-height: 1.6;
+            margin-top: 0.5rem;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 4rem;
+            color: var(--text-secondary);
+        }
+        
+        .error {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            padding: 1.5rem;
+            border-radius: 15px;
+            color: var(--danger);
+            text-align: center;
+        }
+        
+        .back-button {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1.5rem;
+            background: var(--primary-gradient);
+            color: white;
+            text-decoration: none;
+            border-radius: 10px;
+            font-weight: 500;
+            transition: all 0.3s;
+            margin-bottom: 1rem;
+        }
+        
+        .back-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(79, 125, 243, 0.3);
+        }
+        
+        .no-transcript {
+            text-align: center;
+            padding: 3rem;
+            color: var(--text-secondary);
+        }
+        
+        .transcript-type-badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 8px;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-left: 1rem;
+        }
+        
+        .transcript-type-badge.realtime {
+            background: rgba(16, 185, 129, 0.1);
+            border-color: rgba(16, 185, 129, 0.3);
+            color: var(--success);
+        }
+        
+        .transcript-type-badge.whisper {
+            background: rgba(79, 125, 243, 0.1);
+            border-color: rgba(79, 125, 243, 0.3);
+            color: #4f7df3;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/" class="back-button">
+            ← Back to Home
+        </a>
+        
+        <div class="header">
+            <h1>Interview Transcript
+                <span id="transcriptType" class="transcript-type-badge"></span>
+            </h1>
+            <div class="metadata">
+                <div class="metadata-item">
+                    <span class="metadata-label">Room ID</span>
+                    <span class="metadata-value" id="roomId">Loading...</span>
+                </div>
+                <div class="metadata-item">
+                    <span class="metadata-label">Date</span>
+                    <span class="metadata-value" id="date">Loading...</span>
+                </div>
+                <div class="metadata-item">
+                    <span class="metadata-label">Duration</span>
+                    <span class="metadata-value" id="duration">Loading...</span>
+                </div>
+                <div class="metadata-item">
+                    <span class="metadata-label">Entries</span>
+                    <span class="metadata-value" id="entryCount">Loading...</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="transcript-container" id="transcriptContainer">
+            <div class="loading">Loading transcript...</div>
+        </div>
+    </div>
+
+    <script>
+        // Get room ID from URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const roomId = window.location.pathname.split('/').pop();
+        const format = urlParams.get('format') || 'text';
+        
+        async function loadTranscript() {
+            const container = document.getElementById('transcriptContainer');
+            
+            try {
+                // First try to load the transcript
+                let response = await fetch(`/api/transcript/${roomId}?format=json`);
+                let isRealtime = false;
+                let transcriptData;
+                
+                if (!response.ok) {
+                    // Try realtime transcript as fallback
+                    response = await fetch(`/api/transcript/${roomId}?format=realtime`);
+                    if (!response.ok) {
+                        throw new Error('Transcript not found');
+                    }
+                    isRealtime = true;
+                }
+                
+                transcriptData = await response.json();
+                
+                // Update metadata
+                document.getElementById('roomId').textContent = roomId.substring(0, 8) + '...';
+                
+                if (isRealtime || transcriptData.entries) {
+                    // Real-time transcript format
+                    const data = transcriptData;
+                    document.getElementById('date').textContent = new Date(data.startTime).toLocaleString();
+                    document.getElementById('entryCount').textContent = data.entries ? data.entries.length : data.entryCount;
+                    
+                    // Calculate duration if possible
+                    if (data.entries && data.entries.length > 0) {
+                        const firstTime = data.entries[0].timestamp;
+                        const lastTime = data.entries[data.entries.length - 1].timestamp;
+                        const durationMs = lastTime - firstTime;
+                        const minutes = Math.floor(durationMs / 60000);
+                        const seconds = Math.floor((durationMs % 60000) / 1000);
+                        document.getElementById('duration').textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+                    } else {
+                        document.getElementById('duration').textContent = 'N/A';
+                    }
+                    
+                    // Update type badge
+                    const typeBadge = document.getElementById('transcriptType');
+                    typeBadge.textContent = 'Live Transcript';
+                    typeBadge.className = 'transcript-type-badge realtime';
+                    
+                    // Display entries
+                    if (data.entries && data.entries.length > 0) {
+                        container.innerHTML = '';
+                        data.entries.forEach(entry => {
+                            const entryEl = createTranscriptEntry(
+                                entry.speaker,
+                                entry.text,
+                                new Date(entry.timestamp).toLocaleTimeString()
+                            );
+                            container.appendChild(entryEl);
+                        });
+                    } else {
+                        container.innerHTML = '<div class="no-transcript">No transcript entries found</div>';
+                    }
+                } else {
+                    // Whisper transcript format
+                    document.getElementById('date').textContent = new Date(transcriptData.startTime).toLocaleString();
+                    document.getElementById('duration').textContent = formatDuration(transcriptData.duration);
+                    
+                    // Update type badge
+                    const typeBadge = document.getElementById('transcriptType');
+                    typeBadge.textContent = 'AI Transcript';
+                    typeBadge.className = 'transcript-type-badge whisper';
+                    
+                    // Count entries
+                    let entryCount = 0;
+                    if (transcriptData.merged) {
+                        entryCount = transcriptData.merged.length;
+                    } else {
+                        if (transcriptData.speakers?.interviewer) {
+                            entryCount += transcriptData.speakers.interviewer.length;
+                        }
+                        if (transcriptData.speakers?.interviewee) {
+                            entryCount += transcriptData.speakers.interviewee.length;
+                        }
+                    }
+                    document.getElementById('entryCount').textContent = entryCount;
+                    
+                    // Display transcript
+                    if (transcriptData.merged && transcriptData.merged.length > 0) {
+                        container.innerHTML = '';
+                        transcriptData.merged.forEach(segment => {
+                            const entryEl = createTranscriptEntry(
+                                segment.speaker,
+                                segment.text,
+                                formatTimestamp(segment.start)
+                            );
+                            container.appendChild(entryEl);
+                        });
+                    } else {
+                        container.innerHTML = '<div class="no-transcript">No transcript content available</div>';
+                    }
+                }
+                
+            } catch (error) {
+                console.error('Error loading transcript:', error);
+                container.innerHTML = `
+                    <div class="error">
+                        Failed to load transcript: ${error.message}
+                    </div>
+                `;
+                
+                // Update metadata with error state
+                document.getElementById('roomId').textContent = roomId.substring(0, 8) + '...';
+                document.getElementById('date').textContent = 'N/A';
+                document.getElementById('duration').textContent = 'N/A';
+                document.getElementById('entryCount').textContent = '0';
+            }
+        }
+        
+        function createTranscriptEntry(speaker, text, timestamp) {
+            const entry = document.createElement('div');
+            entry.className = 'transcript-entry';
+            
+            const speakerEl = document.createElement('div');
+            speakerEl.className = `speaker ${speaker.toLowerCase()}`;
+            
+            const icon = document.createElement('div');
+            icon.className = 'speaker-icon';
+            icon.textContent = speaker === 'Interviewer' ? 'I' : 'C';
+            
+            const speakerName = document.createElement('span');
+            speakerName.textContent = speaker;
+            
+            const timestampEl = document.createElement('span');
+            timestampEl.className = 'timestamp';
+            timestampEl.textContent = timestamp;
+            
+            speakerEl.appendChild(icon);
+            speakerEl.appendChild(speakerName);
+            speakerEl.appendChild(timestampEl);
+            
+            const textEl = document.createElement('div');
+            textEl.className = 'text';
+            textEl.textContent = text;
+            
+            entry.appendChild(speakerEl);
+            entry.appendChild(textEl);
+            
+            return entry;
+        }
+        
+        function formatDuration(milliseconds) {
+            if (!milliseconds) return 'N/A';
+            const seconds = Math.floor(milliseconds / 1000);
+            const minutes = Math.floor(seconds / 60);
+            const remainingSeconds = seconds % 60;
+            return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+        }
+        
+        function formatTimestamp(seconds) {
+            if (!seconds && seconds !== 0) return '';
+            const mins = Math.floor(seconds / 60);
+            const secs = Math.floor(seconds % 60);
+            return `${mins}:${secs.toString().padStart(2, '0')}`;
+        }
+        
+        // Load transcript on page load
+        loadTranscript();
+    </script>
+</body>
+</html>

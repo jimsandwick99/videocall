@@ -338,6 +338,72 @@
             background: var(--glass-border);
             margin: 1.5rem 0;
         }
+        
+        .transcript-preview {
+            margin-top: 1rem;
+            padding: 1rem;
+            background: rgba(16, 185, 129, 0.08);
+            border: 1px solid rgba(16, 185, 129, 0.2);
+            border-radius: 10px;
+            max-height: 150px;
+            overflow-y: auto;
+            display: none;
+        }
+        
+        .transcript-preview.active {
+            display: block;
+        }
+        
+        .transcript-preview-header {
+            font-weight: 500;
+            color: var(--success);
+            margin-bottom: 0.5rem;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .transcript-preview-content {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            line-height: 1.5;
+        }
+        
+        .transcript-entry-preview {
+            margin-bottom: 0.5rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        
+        .transcript-entry-preview:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+        
+        .transcript-speaker {
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-right: 0.5rem;
+        }
+        
+        .view-full-transcript {
+            display: inline-block;
+            margin-top: 0.5rem;
+            padding: 0.3rem 0.6rem;
+            background: var(--primary-gradient);
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+        }
+        
+        .view-full-transcript:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 3px 10px rgba(79, 125, 243, 0.25);
+        }
     </style>
 </head>
 <body>
@@ -454,7 +520,7 @@
                 
                 recordingsList.innerHTML = '';
                 
-                data.recordings.forEach(recording => {
+                data.recordings.forEach(async (recording) => {
                     const recordingEl = document.createElement('div');
                     recordingEl.className = 'recording-item';
                     
@@ -479,13 +545,14 @@
                             transcriptLabel = '🤖 View AI Transcript';
                         }
                         
+                        // Use the new transcript viewer page
                         filesHtml += `
-                            <a href="${recording.transcriptPath}" class="recording-file" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border-color: rgba(16, 185, 129, 0.5);">
+                            <a href="/transcript/${recording.roomId}" class="recording-file" target="_blank" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border-color: rgba(16, 185, 129, 0.5);">
                                 ${transcriptLabel}${transcriptInfo}
                             </a>
                         `;
                         
-                        // Add real-time transcript link if available
+                        // Add download links
                         if (recording.realtimeTranscriptPath) {
                             filesHtml += `
                                 <a href="${recording.realtimeTranscriptPath}" class="recording-file" download>
@@ -510,6 +577,9 @@
                         `;
                     });
                     
+                    // Create unique ID for transcript preview
+                    const previewId = `transcript-preview-${recording.roomId}`;
+                    
                     recordingEl.innerHTML = `
                         <div class="recording-header">
                             <div class="recording-room">
@@ -521,14 +591,94 @@
                         <div class="recording-files">
                             ${filesHtml}
                         </div>
+                        <div id="${previewId}" class="transcript-preview">
+                            <div class="transcript-preview-header">
+                                <span>📝 Transcript Preview</span>
+                            </div>
+                            <div class="transcript-preview-content">
+                                <div class="loading">Loading preview...</div>
+                            </div>
+                        </div>
                     `;
                     
                     recordingsList.appendChild(recordingEl);
+                    
+                    // Load transcript preview if available
+                    if (recording.hasTranscript) {
+                        loadTranscriptPreview(recording.roomId, previewId);
+                    }
                 });
                 
             } catch (error) {
                 console.error('Error loading recordings:', error);
                 recordingsList.innerHTML = '<div class="no-recordings">Error loading recordings. Please try again.</div>';
+            }
+        }
+        
+        async function loadTranscriptPreview(roomId, previewId) {
+            const previewEl = document.getElementById(previewId);
+            if (!previewEl) return;
+            
+            try {
+                // Try to load transcript (prefer realtime, fallback to whisper)
+                let response = await fetch(`/api/transcript/${roomId}?format=realtime`);
+                let isRealtime = true;
+                
+                if (!response.ok) {
+                    // Try whisper transcript
+                    response = await fetch(`/api/transcript/${roomId}?format=json`);
+                    isRealtime = false;
+                    
+                    if (!response.ok) {
+                        previewEl.style.display = 'none';
+                        return;
+                    }
+                }
+                
+                const data = await response.json();
+                let previewContent = '';
+                let entriesToShow = [];
+                
+                if (isRealtime || data.entries) {
+                    // Real-time transcript
+                    entriesToShow = (data.entries || []).slice(0, 3);
+                    entriesToShow.forEach(entry => {
+                        previewContent += `
+                            <div class="transcript-entry-preview">
+                                <span class="transcript-speaker">${entry.speaker}:</span>
+                                ${entry.text.substring(0, 150)}${entry.text.length > 150 ? '...' : ''}
+                            </div>
+                        `;
+                    });
+                } else if (data.merged) {
+                    // Whisper transcript
+                    entriesToShow = data.merged.slice(0, 3);
+                    entriesToShow.forEach(segment => {
+                        previewContent += `
+                            <div class="transcript-entry-preview">
+                                <span class="transcript-speaker">${segment.speaker}:</span>
+                                ${segment.text.substring(0, 150)}${segment.text.length > 150 ? '...' : ''}
+                            </div>
+                        `;
+                    });
+                }
+                
+                if (previewContent) {
+                    previewContent += `
+                        <a href="/transcript/${roomId}" target="_blank" class="view-full-transcript">
+                            View Full Transcript →
+                        </a>
+                    `;
+                    
+                    previewEl.querySelector('.transcript-preview-content').innerHTML = previewContent;
+                    previewEl.classList.add('active');
+                } else {
+                    previewEl.style.display = 'none';
+                }
+                
+            } catch (error) {
+                console.error('Error loading transcript preview:', error);
+                previewEl.style.display = 'none';
             }
         }
         
