@@ -181,15 +181,28 @@ function createTwilioEndpoints(app) {
         .update({ status: 'completed' });
       console.log(`[TWILIO STOP] Room completed successfully`);
 
-      // Wait for recordings to be processed
-      console.log(`[TWILIO STOP] Waiting 5 seconds for recordings to process...`);
-      await new Promise(resolve => setTimeout(resolve, 5000));
+      // Wait for recordings to be processed (with timeout)
+      console.log(`[TWILIO STOP] Waiting for recordings to process...`);
+      const waitTime = 5000; // 5 seconds
+      const waitPromise = new Promise(resolve => setTimeout(resolve, waitTime));
+      await Promise.race([
+        waitPromise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout waiting for recordings')), 10000))
+      ]).catch(err => {
+        console.warn(`[TWILIO STOP WARNING] ${err.message}, continuing anyway...`);
+      });
 
       // Get all recordings
       console.log(`[TWILIO STOP] Fetching recordings...`);
-      const recordings = await twilioClient.video.v1.rooms(roomInfo.twilioRoomSid)
-        .recordings
-        .list();
+      let recordings = [];
+      try {
+        recordings = await twilioClient.video.v1.rooms(roomInfo.twilioRoomSid)
+          .recordings
+          .list();
+      } catch (error) {
+        console.error(`[TWILIO STOP ERROR] Failed to fetch recordings:`, error.message);
+        // Continue anyway - recordings might still be processing
+      }
 
       console.log(`[TWILIO STOP] Found ${recordings.length} recordings`);
       
@@ -220,6 +233,11 @@ function createTwilioEndpoints(app) {
       const participants = await twilioClient.video.v1.rooms(roomInfo.twilioRoomSid)
         .participants
         .list();
+      
+      console.log(`[TWILIO STOP] Found ${participants.length} participants:`);
+      participants.forEach((p, idx) => {
+        console.log(`[TWILIO STOP]   Participant ${idx + 1}: ${p.identity} (SID: ${p.sid})`);
+      });
 
       // Download recordings
       const recordingDir = path.join(__dirname, 'recordings', roomId, 'twilio');

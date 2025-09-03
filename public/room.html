@@ -288,6 +288,8 @@
             gap: 1rem;
             position: relative;
             z-index: 100;
+            flex-wrap: wrap;
+            min-height: 90px;
         }
         
         .control-group {
@@ -295,6 +297,7 @@
             gap: 0.75rem;
             padding: 0 1rem;
             border-right: 1px solid var(--glass-border);
+            flex-shrink: 0;
         }
         
         .control-group:last-child {
@@ -356,11 +359,18 @@
         
         .control-btn.recording {
             animation: recordPulse 1.5s ease-in-out infinite;
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
         }
         
         @keyframes recordPulse {
-            0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
-            50% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+            0%, 100% { 
+                box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+                transform: scale(1);
+            }
+            50% { 
+                box-shadow: 0 0 0 10px rgba(239, 68, 68, 0);
+                transform: scale(1.05);
+            }
         }
         
         .control-label {
@@ -380,7 +390,7 @@
         }
         
         .end-call-btn {
-            background: var(--danger);
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
             width: 60px;
             border-radius: 30px;
         }
@@ -462,6 +472,8 @@
             
             .control-bar {
                 padding: 1rem;
+                gap: 0.5rem;
+                min-height: 80px;
             }
             
             .control-btn {
@@ -473,6 +485,7 @@
             .control-group {
                 gap: 0.5rem;
                 padding: 0 0.5rem;
+                flex-wrap: nowrap;
             }
         }
         
@@ -586,11 +599,11 @@
         <div class="control-group" id="recordingControls" style="display: none;">
             <button class="control-btn" id="startRecording">
                 <span>⏺️</span>
-                <span class="control-label">Start Recording</span>
+                <span class="control-label">Start</span>
             </button>
             <button class="control-btn recording" id="stopRecording" style="display: none;">
                 <span>⏹️</span>
-                <span class="control-label">Stop Recording</span>
+                <span class="control-label">Stop</span>
             </button>
         </div>
         
@@ -633,6 +646,7 @@
         let isRecording = false;
         let twilioRoom = null;
         let twilioConnected = false;
+        let twilioLocalAudioTrack = null;  // Store reference to Twilio audio track
         
         // Call timer
         let callStartTime = null;
@@ -880,7 +894,7 @@
                 console.log('[CLIENT] Interviewee joining Twilio recording...');
                 // Show recording indicator for interviewee
                 document.getElementById('recordingIndicator').classList.add('active');
-                // Join Twilio room as interviewee
+                // Join Twilio room as interviewee (force flag indicates this is interviewee)
                 await startTwilioRecording(true);
             }
         });
@@ -1028,6 +1042,17 @@
                 isAudioEnabled = !isAudioEnabled;
                 audioTrack.enabled = isAudioEnabled;
                 
+                // ALSO mute/unmute the Twilio track if recording
+                if (twilioLocalAudioTrack) {
+                    if (!isAudioEnabled) {
+                        console.log('[MUTE] Disabling Twilio audio track');
+                        twilioLocalAudioTrack.disable();
+                    } else {
+                        console.log('[MUTE] Enabling Twilio audio track');
+                        twilioLocalAudioTrack.enable();
+                    }
+                }
+                
                 const btn = document.getElementById('toggleAudio');
                 if (!isAudioEnabled) {
                     btn.classList.add('muted');
@@ -1092,14 +1117,20 @@
                 console.log('[CLIENT TWILIO] ========================================');
                 console.log('[CLIENT TWILIO] Starting recording process...');
                 console.log('[CLIENT TWILIO] Room ID:', roomId);
-                console.log('[CLIENT TWILIO] Is Interviewer:', isInterviewer);
+                console.log('[CLIENT TWILIO] User role (isInterviewer):', isInterviewer);
+                console.log('[CLIENT TWILIO] Force start (interviewee notified):', forceStart);
+                
+                // When forceStart is true, it means the interviewee was notified to join
+                // So we need to send the CORRECT identity
+                const actualRole = forceStart ? false : isInterviewer;
+                console.log('[CLIENT TWILIO] Sending role to server:', actualRole ? 'interviewer' : 'interviewee');
                 
                 const response = await fetch('/api/twilio/start', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ 
                         roomId,
-                        isInterviewer: isInterviewer 
+                        isInterviewer: actualRole
                     })
                 });
                 
@@ -1144,9 +1175,15 @@
                     const audioTrack = localStream.getAudioTracks()[0];
                     if (audioTrack) {
                         console.log('[CLIENT TWILIO] Publishing local audio track to Twilio...');
-                        const twilioAudioTrack = new Twilio.Video.LocalAudioTrack(audioTrack);
-                        await twilioRoom.localParticipant.publishTrack(twilioAudioTrack);
+                        twilioLocalAudioTrack = new Twilio.Video.LocalAudioTrack(audioTrack);
+                        await twilioRoom.localParticipant.publishTrack(twilioLocalAudioTrack);
                         console.log('[CLIENT TWILIO] Audio track published');
+                        
+                        // If currently muted, disable the Twilio track too
+                        if (!isAudioEnabled) {
+                            console.log('[CLIENT TWILIO] Audio is muted, disabling Twilio track');
+                            twilioLocalAudioTrack.disable();
+                        }
                     } else {
                         console.warn('[CLIENT TWILIO WARNING] No local audio track found');
                     }
@@ -1178,17 +1215,27 @@
                 console.log('[CLIENT TWILIO] Stopping recording...');
                 console.log('[CLIENT TWILIO] Room ID:', roomId);
                 console.log('[CLIENT TWILIO] Twilio Room:', twilioRoom.name);
+                console.log('[CLIENT TWILIO] Is Interviewer:', isInterviewer);
                 
                 console.log('[CLIENT TWILIO] Disconnecting from Twilio room...');
                 twilioRoom.disconnect();
                 twilioConnected = false;
+                twilioLocalAudioTrack = null;  // Clear the reference
                 console.log('[CLIENT TWILIO] Disconnected from Twilio');
                 
-                console.log('[CLIENT TWILIO] Calling stop endpoint...');
+                // Only the interviewer should call the stop endpoint
+                // The interviewee just disconnects from Twilio
+                if (!isInterviewer) {
+                    console.log('[CLIENT TWILIO] Interviewee - not calling stop endpoint, just disconnecting');
+                    console.log('[CLIENT TWILIO] ========================================');
+                    return;
+                }
+                
+                console.log('[CLIENT TWILIO] Interviewer - calling stop endpoint...');
                 
                 // Add timeout to prevent hanging
                 const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+                const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout for downloading recordings
                 
                 let response;
                 try {
@@ -1201,9 +1248,15 @@
                     clearTimeout(timeoutId);
                 } catch (fetchError) {
                     clearTimeout(timeoutId);
+                    console.error('[CLIENT TWILIO ERROR] Fetch failed:', fetchError);
+                    
                     if (fetchError.name === 'AbortError') {
-                        console.error('[CLIENT TWILIO ERROR] Request timed out after 30 seconds');
-                        alert('Recording stop timed out. The recording may still be processing. Check the recordings list in a minute.');
+                        console.error('[CLIENT TWILIO ERROR] Request timed out after 60 seconds');
+                        alert('Recording stop timed out. The recording is likely still being processed. Please check the recordings list in a minute.');
+                        return;
+                    } else if (fetchError.message.includes('Failed to fetch')) {
+                        console.error('[CLIENT TWILIO ERROR] Network error - server may be busy or connection lost');
+                        alert('Connection lost while stopping recording. The recording may have been saved. Please check the recordings list.');
                         return;
                     }
                     throw fetchError;
