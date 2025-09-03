@@ -368,6 +368,13 @@ io.on('connection', (socket) => {
     });
   });
   
+  // Handle transcript status updates
+  socket.on('transcript-status', (data) => {
+    console.log(`[TRANSCRIPT STATUS] ${data.participant} ${data.isOpen ? 'enabled' : 'disabled'} transcription in room ${data.roomId}`);
+    // Relay status to other participants in the room
+    socket.to(data.roomId).emit('transcript-status', data);
+  });
+  
   socket.on('disconnect', () => {
     console.log(`User disconnected: ${socket.id} from room ${currentRoom}`);
     if (currentRoom) {

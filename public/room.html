@@ -901,7 +901,7 @@
             border-radius: 20px 0 0 20px;
             border-right: none;
             cursor: pointer;
-            display: flex;
+            display: none; /* Hide by default - will show via JS for interviewer only */
             align-items: center;
             justify-content: center;
             font-size: 1.2rem;
@@ -992,11 +992,16 @@
         
         @media (max-width: 768px) {
             .transcript-panel {
-                display: none !important;
+                width: 100%;
+                height: 40vh;
+                bottom: 70px;
             }
             
             .transcript-toggle-btn {
-                display: none !important;
+                /* Keep button visible on mobile for debugging */
+                bottom: 100px;
+                top: auto;
+                transform: none;
             }
         }
     </style>
@@ -1128,6 +1133,13 @@
         </div>
         
         <div class="control-group">
+            <button class="control-btn" id="transcriptControlBtn" title="Toggle Transcript">
+                <span>💬</span>
+                <span class="control-label">Transcript</span>
+            </button>
+        </div>
+        
+        <div class="control-group">
             <button class="control-btn end-call-btn" id="endCall">
                 <span>📞</span>
                 <span class="control-label">End Call</span>
@@ -1188,11 +1200,17 @@
             document.getElementById('localAvatar').textContent = 'I';
             document.getElementById('remoteAvatar').textContent = 'C';
             document.getElementById('recordingControls').style.display = 'flex';
+            // Show sidebar transcript toggle for interviewer on desktop
+            if (window.innerWidth > 768) {
+                document.getElementById('transcriptToggle').style.display = 'flex';
+            }
         } else {
             document.getElementById('localRole').textContent = 'Interviewee';
             document.getElementById('remoteRole').textContent = 'Interviewer';
             document.getElementById('localAvatar').textContent = 'C';
             document.getElementById('remoteAvatar').textContent = 'I';
+            // Hide sidebar toggle for interviewee - they use control bar button
+            document.getElementById('transcriptToggle').style.display = 'none';
         }
         
         const configuration = {
@@ -1288,6 +1306,39 @@
         socket.on('user-connected', async (userId) => {
             console.log('User connected:', userId);
             statusText.textContent = 'Participant joined';
+            
+            // Auto-enable transcription for BOTH participants when connected
+            console.log('[AUTO-TRANSCRIPT] Remote participant connected, enabling auto-transcription...');
+            console.log('[AUTO-TRANSCRIPT] Current role:', isInterviewer ? 'INTERVIEWER' : 'INTERVIEWEE');
+            setTimeout(() => {
+                if (!autoTranscriptionEnabled && isAudioEnabled) {
+                    console.log('[AUTO-TRANSCRIPT] Starting background transcription for', isInterviewer ? 'INTERVIEWER' : 'INTERVIEWEE');
+                    autoTranscriptionEnabled = true;
+                    
+                    // Start speech recognition for BOTH interviewer and interviewee
+                    if (!isTranscribing) {
+                        console.log('[AUTO-TRANSCRIPT] Calling startSpeechRecognition() for', isInterviewer ? 'INTERVIEWER' : 'INTERVIEWEE');
+                        startSpeechRecognition();
+                    }
+                    
+                    // Only auto-open transcript panel for interviewer
+                    if (isInterviewer && !isTranscriptOpen) {
+                        console.log('[AUTO-TRANSCRIPT] Auto-opening transcript panel for INTERVIEWER');
+                        if (window.innerWidth > 768) {
+                            // Use sidebar toggle on desktop
+                            transcriptToggle.click();
+                        } else {
+                            // Use control button on mobile
+                            toggleTranscriptPanel();
+                        }
+                    } else if (!isInterviewer) {
+                        console.log('[AUTO-TRANSCRIPT] INTERVIEWEE: Transcription running in background (panel not auto-opened)');
+                    }
+                    
+                    // Notify about transcription status
+                    console.log('[AUTO-TRANSCRIPT] Transcription now ACTIVE for:', isInterviewer ? 'INTERVIEWER' : 'INTERVIEWEE');
+                }
+            }, 2000); // Wait 2 seconds for connection to stabilize
             
             if (!peerConnection) {
                 await setupPeerConnection();
@@ -1588,13 +1639,15 @@
                         transcriptStatus.textContent = 'Muted';
                     }
                 } else {
-                    // RESTART transcription when unmuted (only if transcript panel is open)
+                    // RESTART transcription when unmuted (if panel is open OR auto-transcription is enabled)
                     console.log('[MUTE] Restarting speech recognition - user unmuted');
-                    if (isTranscriptOpen) {
+                    if (isTranscriptOpen || autoTranscriptionEnabled) {
                         // Small delay to ensure clean restart after abort
                         setTimeout(() => {
                             if (!isTranscribing && isAudioEnabled) {
-                                addTranscriptEntry('System', '🎤 Microphone unmuted - transcription resumed', 'system');
+                                if (isTranscriptOpen) {
+                                    addTranscriptEntry('System', '🎤 Microphone unmuted - transcription resumed', 'system');
+                                }
                                 startSpeechRecognition();
                             }
                         }, 100);
@@ -1951,9 +2004,10 @@
         let transcriptEntries = [];
         let interimTranscript = '';
         let currentSpeaker = 'local';
+        let autoTranscriptionEnabled = false; // Track if auto-transcription is running
         
-        // Toggle transcript panel
-        transcriptToggle.addEventListener('click', () => {
+        // Function to toggle transcript panel
+        function toggleTranscriptPanel() {
             isTranscriptOpen = !isTranscriptOpen;
             
             if (isTranscriptOpen) {
@@ -1962,21 +2016,73 @@
                 mainContainer.classList.add('transcript-open');
                 transcriptToggle.innerHTML = '<span>✕</span>';
                 
+                // Update control button state
+                const controlBtn = document.getElementById('transcriptControlBtn');
+                if (controlBtn) {
+                    controlBtn.classList.add('active');
+                }
+                
+                // Add initial information message
+                addTranscriptEntry('System', '📝 Live transcript is now active', 'system');
+                if (!isInterviewer) {
+                    addTranscriptEntry('System', '👤 You are the INTERVIEWEE', 'system');
+                } else {
+                    addTranscriptEntry('System', '👔 You are the INTERVIEWER', 'system');
+                }
+                addTranscriptEntry('System', '🎯 Important: Both participants must enable transcription to see each other\'s speech', 'system');
+                
+                // Notify remote participant that we have transcript open
+                if (socket && socket.connected) {
+                    socket.emit('transcript-status', {
+                        roomId: roomId,
+                        isOpen: true,
+                        participant: isInterviewer ? 'Interviewer' : 'Interviewee'
+                    });
+                }
+                
                 // Start speech recognition ONLY if not muted and not already started
                 if (!isTranscribing && isAudioEnabled) {
+                    console.log('[PANEL OPEN] Starting speech recognition for', isInterviewer ? 'INTERVIEWER' : 'INTERVIEWEE');
                     startSpeechRecognition();
                 } else if (!isAudioEnabled) {
                     // Show muted status if microphone is muted
                     addTranscriptEntry('System', '🔇 Microphone is muted. Unmute to start transcription.', 'system');
                     transcriptStatus.textContent = 'Muted';
+                } else if (isTranscribing) {
+                    console.log('[PANEL OPEN] Speech recognition already running for', isInterviewer ? 'INTERVIEWER' : 'INTERVIEWEE');
+                    addTranscriptEntry('System', '✅ Speech recognition is active', 'system');
                 }
             } else {
                 transcriptPanel.classList.remove('active');
                 transcriptToggle.classList.remove('panel-open');
                 mainContainer.classList.remove('transcript-open');
                 transcriptToggle.innerHTML = '<span>💬</span>';
+                
+                // Update control button state
+                const controlBtn = document.getElementById('transcriptControlBtn');
+                if (controlBtn) {
+                    controlBtn.classList.remove('active');
+                }
+                
+                // Notify remote participant that we closed transcript
+                if (socket && socket.connected) {
+                    socket.emit('transcript-status', {
+                        roomId: roomId,
+                        isOpen: false,
+                        participant: isInterviewer ? 'Interviewer' : 'Interviewee'
+                    });
+                }
             }
-        });
+        }
+        
+        // Toggle transcript panel - sidebar button
+        transcriptToggle.addEventListener('click', toggleTranscriptPanel);
+        
+        // Toggle transcript panel - control bar button
+        const transcriptControlBtn = document.getElementById('transcriptControlBtn');
+        if (transcriptControlBtn) {
+            transcriptControlBtn.addEventListener('click', toggleTranscriptPanel);
+        }
         
         // Initialize Speech Recognition
         function startSpeechRecognition() {
@@ -1984,6 +2090,7 @@
             if (!isAudioEnabled) {
                 console.warn('[SPEECH] Cannot start recognition - microphone is muted');
                 transcriptStatus.textContent = 'Muted';
+                addTranscriptEntry('System', '🔇 Your microphone is muted. Unmute to enable transcription.', 'system');
                 return;
             }
             
@@ -1991,7 +2098,8 @@
             if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
                 console.warn('Speech recognition not supported in this browser');
                 transcriptStatus.textContent = 'Not supported';
-                addTranscriptEntry('system', 'Speech recognition is not supported in this browser. Try Chrome or Edge.', 'system');
+                addTranscriptEntry('System', '⚠️ Speech recognition is not supported in this browser. Try Chrome or Edge.', 'system');
+                addTranscriptEntry('System', '💡 Note: Each participant transcribes their own audio locally', 'system');
                 return;
             }
             
@@ -2021,19 +2129,34 @@
                 
                 // Add final transcript as an entry
                 if (finalTranscript) {
-                    // Determine speaker (local for now, would need more sophisticated detection for remote)
+                    // Determine speaker based on role
                     const speaker = isInterviewer ? 'Interviewer' : 'Interviewee';
+                    
+                    console.log('[SPEECH RESULT] Final transcript detected');
+                    console.log('[SPEECH RESULT] Speaker:', speaker);
+                    console.log('[SPEECH RESULT] Text:', finalTranscript);
+                    console.log('[SPEECH RESULT] Panel open:', isTranscriptOpen);
+                    
+                    // Try to add to UI if panel is open
                     addTranscriptEntry(speaker, finalTranscript, 'local');
                     
-                    // Send transcript to other participant
+                    // ALWAYS send transcript to other participant (even if panel is closed)
                     if (socket && socket.connected) {
+                        console.log('[TRANSCRIPT SEND] Sending to remote participant');
+                        console.log('[TRANSCRIPT SEND] Role:', speaker);
+                        console.log('[TRANSCRIPT SEND] Text:', finalTranscript.substring(0, 50) + '...');
                         socket.emit('transcript', {
                             roomId: roomId,
                             speaker: speaker,
                             text: finalTranscript,
                             timestamp: Date.now()
                         });
+                    } else {
+                        console.error('[TRANSCRIPT SEND] ERROR - Socket not connected, cannot send transcript');
                     }
+                    
+                    // Always log transcript for debugging
+                    console.log('[LOCAL TRANSCRIPT SUMMARY]', speaker + ':', finalTranscript);
                 }
                 
                 // Update interim display if needed
@@ -2042,8 +2165,11 @@
             
             recognition.onstart = () => {
                 isTranscribing = true;
-                transcriptStatus.textContent = 'Listening';
-                console.log('Speech recognition started');
+                if (transcriptStatus) {
+                    transcriptStatus.textContent = 'Listening';
+                }
+                console.log('[SPEECH] Recognition started for', isInterviewer ? 'INTERVIEWER' : 'INTERVIEWEE');
+                console.log('[SPEECH] Auto-transcription:', autoTranscriptionEnabled, 'Panel open:', isTranscriptOpen);
             };
             
             recognition.onerror = (event) => {
@@ -2100,23 +2226,30 @@
             recognition.onend = () => {
                 isTranscribing = false;
                 
-                // CRITICAL: Only restart if panel is open AND microphone is NOT muted
-                if (isTranscriptOpen && isAudioEnabled) {
-                    transcriptStatus.textContent = 'Restarting...';
+                // Restart if microphone is enabled AND (panel is open OR auto-transcription is enabled)
+                if ((isTranscriptOpen || autoTranscriptionEnabled) && isAudioEnabled) {
+                    if (transcriptStatus) {
+                        transcriptStatus.textContent = 'Restarting...';
+                    }
                     setTimeout(() => {
-                        if (isTranscriptOpen && isAudioEnabled && recognition) {
+                        if ((isTranscriptOpen || autoTranscriptionEnabled) && isAudioEnabled && recognition) {
                             try {
                                 recognition.start();
+                                console.log('[SPEECH] Recognition restarted (auto=' + autoTranscriptionEnabled + ', open=' + isTranscriptOpen + ')');
                             } catch (e) {
                                 console.log('Recognition restart failed:', e);
                             }
                         }
                     }, 100);
                 } else if (!isAudioEnabled) {
-                    transcriptStatus.textContent = 'Muted';
+                    if (transcriptStatus) {
+                        transcriptStatus.textContent = 'Muted';
+                    }
                     console.log('[SPEECH] Not restarting recognition - microphone is muted');
                 } else {
-                    transcriptStatus.textContent = 'Stopped';
+                    if (transcriptStatus) {
+                        transcriptStatus.textContent = 'Stopped';
+                    }
                 }
             };
             
@@ -2130,6 +2263,12 @@
         
         // Add transcript entry to the panel
         function addTranscriptEntry(speaker, text, type = 'local') {
+            // CRITICAL FIX: Only check if panel is open, not the role
+            if (!isTranscriptOpen) {
+                console.log('[TRANSCRIPT LOG] Panel closed -', speaker + ':', text);
+                return;
+            }
+            
             // Remove empty message if it exists
             const emptyMsg = transcriptContent.querySelector('.transcript-empty');
             if (emptyMsg) {
@@ -2209,9 +2348,55 @@
         
         // Handle incoming transcripts from remote participant
         socket.on('transcript', (data) => {
-            if (data.speaker !== (isInterviewer ? 'Interviewer' : 'Interviewee')) {
+            console.log('[TRANSCRIPT RECEIVED]', 'Speaker:', data.speaker, 'Text:', data.text?.substring(0, 50) + '...');
+            
+            // Check if this is from the other participant
+            const myRole = isInterviewer ? 'Interviewer' : 'Interviewee';
+            if (data.speaker !== myRole) {
+                console.log('[TRANSCRIPT] Processing remote transcript from', data.speaker);
+                
+                // CRITICAL FIX: Add to panel for BOTH participants if their panel is open
+                if (isTranscriptOpen) {
+                    // Force add to transcript panel
+                    const emptyMsg = transcriptContent.querySelector('.transcript-empty');
+                    if (emptyMsg) {
+                        emptyMsg.remove();
+                    }
+                    
+                    const entry = document.createElement('div');
+                    entry.className = 'transcript-entry remote';
+                    entry.innerHTML = `
+                        <div class="transcript-speaker">${data.speaker}</div>
+                        <div class="transcript-text">${data.text}</div>
+                        <div class="transcript-timestamp">${new Date(data.timestamp || Date.now()).toLocaleTimeString()}</div>
+                    `;
+                    transcriptContent.appendChild(entry);
+                    transcriptContent.scrollTop = transcriptContent.scrollHeight;
+                    
+                    console.log('[TRANSCRIPT] Added remote transcript to panel for', myRole);
+                } else {
+                    console.log('[TRANSCRIPT] Panel closed, just logging:', data.speaker, data.text);
+                }
+            } else {
+                console.log('[TRANSCRIPT] Ignoring own transcript echo');
+            }
+        });
+        
+        // Handle transcript status from remote participant
+        socket.on('transcript-status', (data) => {
+            if (data.participant !== (isInterviewer ? 'Interviewer' : 'Interviewee')) {
                 // This is from the remote participant
-                addTranscriptEntry(data.speaker, data.text, 'remote');
+                if (data.isOpen) {
+                    console.log('[TRANSCRIPT STATUS] Remote participant enabled transcription');
+                    if (isTranscriptOpen) {
+                        addTranscriptEntry('System', `✅ ${data.participant} has enabled transcription`, 'system');
+                    }
+                } else {
+                    console.log('[TRANSCRIPT STATUS] Remote participant disabled transcription');
+                    if (isTranscriptOpen) {
+                        addTranscriptEntry('System', `⚠️ ${data.participant} has disabled transcription - you won't see their speech`, 'system');
+                    }
+                }
             }
         });
         
