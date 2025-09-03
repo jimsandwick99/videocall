@@ -159,81 +159,88 @@ function createTwilioEndpoints(app) {
       console.log(`[TWILIO START] Account SID: ${process.env.TWILIO_ACCOUNT_SID?.substring(0, 10)}...`);
       console.log(`[TWILIO START] API Key SID: ${process.env.TWILIO_API_KEY_SID?.substring(0, 10)}...`);
       
-      // Create Twilio room with recording enabled
-      console.log('[TWILIO START] Creating Twilio room with recording enabled...');
-      const room = await twilioClient.video.v1.rooms.create({
-        uniqueName: `room_${roomId}_${Date.now()}`,
-        type: 'group', // or 'group-small' for 2-4 participants
-        recordParticipantsOnConnect: true, // This should auto-record
-        statusCallback: process.env.BASE_URL ? `${process.env.BASE_URL}/api/twilio/webhook` : undefined,
-        statusCallbackMethod: 'POST',
-        maxParticipants: 10,
-        mediaRegion: 'us1'
-        // Note: recordingRules are set separately via Recording Rules API if needed
-      });
+      // Check if room already exists for this roomId
+      let room;
+      let roomInfo = twilioRooms.get(roomId);
+      
+      if (roomInfo && roomInfo.twilioRoomName) {
+        // Room already exists, reuse it
+        console.log('[TWILIO START] Room already exists, reusing:');
+        console.log(`[TWILIO START]   - Existing Room SID: ${roomInfo.twilioRoomSid}`);
+        console.log(`[TWILIO START]   - Existing Room Name: ${roomInfo.twilioRoomName}`);
+        
+        // Get the existing room details
+        try {
+          room = await twilioClient.video.v1.rooms(roomInfo.twilioRoomSid).fetch();
+        } catch (error) {
+          // If can't fetch room, it might be completed, create new one
+          console.log('[TWILIO START] Could not fetch existing room, creating new one...');
+          roomInfo = null;
+        }
+      }
+      
+      if (!roomInfo || !room) {
+        // Create new Twilio room with recording enabled
+        console.log('[TWILIO START] Creating new Twilio room with recording enabled...');
+        const roomUniqueName = `room_${roomId}_${Date.now()}`;
+        room = await twilioClient.video.v1.rooms.create({
+          uniqueName: roomUniqueName,
+          type: 'group', // or 'group-small' for 2-4 participants
+          recordParticipantsOnConnect: true, // This should auto-record
+          statusCallback: process.env.BASE_URL ? `${process.env.BASE_URL}/api/twilio/webhook` : undefined,
+          statusCallbackMethod: 'POST',
+          maxParticipants: 10,
+          mediaRegion: 'us1'
+          // Note: recordingRules are set separately via Recording Rules API if needed
+        });
+        
+        // Store room info
+        twilioRooms.set(roomId, {
+          twilioRoomSid: room.sid,
+          twilioRoomName: room.uniqueName,
+          startTime: Date.now()
+        });
+        
+        console.log(`[TWILIO START] New room created successfully:`);
+        console.log(`[TWILIO START]   - SID: ${room.sid}`);
+        console.log(`[TWILIO START]   - Name: ${room.uniqueName}`);
+        console.log(`[TWILIO START]   - Recording enabled: ${room.recordParticipantsOnConnect}`);
+        
+        roomInfo = twilioRooms.get(roomId);
+      }
 
-      // Generate access tokens for participants
+      // Generate access token for the appropriate participant
       const AccessToken = twilio.jwt.AccessToken;
       const VideoGrant = AccessToken.VideoGrant;
-
-      // Token for interviewer
-      const interviewerToken = new AccessToken(
+      
+      const identity = isInterviewer ? 'interviewer' : 'interviewee';
+      
+      const accessToken = new AccessToken(
         process.env.TWILIO_ACCOUNT_SID,
         process.env.TWILIO_API_KEY_SID,
         process.env.TWILIO_API_KEY_SECRET,
         { 
-          identity: 'interviewer',
+          identity: identity,
           ttl: 14400 // 4 hours
         }
       );
 
-      const interviewerGrant = new VideoGrant({
-        room: room.uniqueName
+      const videoGrant = new VideoGrant({
+        room: roomInfo.twilioRoomName  // Use the stored room name
       });
-      interviewerToken.addGrant(interviewerGrant);
+      accessToken.addGrant(videoGrant);
 
-      // Token for interviewee
-      const intervieweeToken = new AccessToken(
-        process.env.TWILIO_ACCOUNT_SID,
-        process.env.TWILIO_API_KEY_SID,
-        process.env.TWILIO_API_KEY_SECRET,
-        { 
-          identity: 'interviewee',
-          ttl: 14400
-        }
-      );
-
-      const intervieweeGrant = new VideoGrant({
-        room: room.uniqueName
-      });
-      intervieweeToken.addGrant(intervieweeGrant);
-
-      // Store room info
-      twilioRooms.set(roomId, {
-        twilioRoomSid: room.sid,
-        twilioRoomName: room.uniqueName,
-        startTime: Date.now()
-      });
-
-      console.log(`[TWILIO START] Room created successfully:`);
-      console.log(`[TWILIO START]   - SID: ${room.sid}`);
-      console.log(`[TWILIO START]   - Name: ${room.uniqueName}`);
-      console.log(`[TWILIO START]   - Recording enabled: ${room.recordParticipantsOnConnect}`);
       console.log(`[TWILIO START] Stored in twilioRooms Map with key: ${roomId}`);
-      
-      // Return only the appropriate token based on role
-      const token = isInterviewer ? interviewerToken.toJwt() : intervieweeToken.toJwt();
-      const identity = isInterviewer ? 'interviewer' : 'interviewee';
       
       console.log(`[TWILIO START] Returning token for: ${identity}`);
       
       res.json({
         success: true,
         room: {
-          sid: room.sid,
-          name: room.uniqueName
+          sid: roomInfo.twilioRoomSid,
+          name: roomInfo.twilioRoomName
         },
-        token: token,
+        token: accessToken.toJwt(),
         identity: identity
       });
 
