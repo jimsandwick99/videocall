@@ -163,19 +163,55 @@ function createTwilioEndpoints(app) {
       let room;
       let roomInfo = twilioRooms.get(roomId);
       
+      // CRITICAL: If interviewee is joining and room doesn't exist in memory,
+      // try to find an active Twilio room with this roomId in the name
+      if (!roomInfo && !isInterviewer) {
+        console.log('[TWILIO START] Interviewee joining - searching for existing Twilio room...');
+        try {
+          // List in-progress rooms and find one matching this roomId
+          const activeRooms = await twilioClient.video.v1.rooms.list({
+            status: 'in-progress',
+            limit: 20
+          });
+          
+          const matchingRoom = activeRooms.find(r => 
+            r.uniqueName.includes(`room_${roomId}_`)
+          );
+          
+          if (matchingRoom) {
+            console.log(`[TWILIO START] Found existing room: ${matchingRoom.uniqueName}`);
+            room = matchingRoom;
+            roomInfo = {
+              twilioRoomSid: matchingRoom.sid,
+              twilioRoomName: matchingRoom.uniqueName,
+              startTime: Date.now() - (matchingRoom.duration || 0) * 1000
+            };
+            // Store in memory for future use
+            twilioRooms.set(roomId, roomInfo);
+          } else {
+            console.log('[TWILIO START] No existing room found for interviewee');
+          }
+        } catch (error) {
+          console.log('[TWILIO START] Error searching for room:', error.message);
+        }
+      }
+      
       if (roomInfo && roomInfo.twilioRoomName) {
         // Room already exists, reuse it
         console.log('[TWILIO START] Room already exists, reusing:');
         console.log(`[TWILIO START]   - Existing Room SID: ${roomInfo.twilioRoomSid}`);
         console.log(`[TWILIO START]   - Existing Room Name: ${roomInfo.twilioRoomName}`);
         
-        // Get the existing room details
-        try {
-          room = await twilioClient.video.v1.rooms(roomInfo.twilioRoomSid).fetch();
-        } catch (error) {
-          // If can't fetch room, it might be completed, create new one
-          console.log('[TWILIO START] Could not fetch existing room, creating new one...');
-          roomInfo = null;
+        // Get the existing room details if we don't have it yet
+        if (!room) {
+          try {
+            room = await twilioClient.video.v1.rooms(roomInfo.twilioRoomSid).fetch();
+          } catch (error) {
+            // If can't fetch room, it might be completed, create new one
+            console.log('[TWILIO START] Could not fetch existing room, creating new one...');
+            roomInfo = null;
+            room = null;
+          }
         }
       }
       
@@ -185,13 +221,14 @@ function createTwilioEndpoints(app) {
         const roomUniqueName = `room_${roomId}_${Date.now()}`;
         room = await twilioClient.video.v1.rooms.create({
           uniqueName: roomUniqueName,
-          type: 'group', // or 'group-small' for 2-4 participants
-          recordParticipantsOnConnect: true, // This should auto-record
+          type: 'group', 
+          recordParticipantsOnConnect: true,
           statusCallback: process.env.BASE_URL ? `${process.env.BASE_URL}/api/twilio/webhook` : undefined,
           statusCallbackMethod: 'POST',
           maxParticipants: 10,
-          mediaRegion: 'us1'
-          // Note: recordingRules are set separately via Recording Rules API if needed
+          mediaRegion: 'us1',
+          audioOnly: false,  // Ensure both audio and video can be recorded
+          videoCodecs: ['VP8', 'H264'] // Support multiple codecs
         });
         
         // Store room info
@@ -213,7 +250,9 @@ function createTwilioEndpoints(app) {
       const AccessToken = twilio.jwt.AccessToken;
       const VideoGrant = AccessToken.VideoGrant;
       
+      // CRITICAL: Ensure unique identity for each participant
       const identity = isInterviewer ? 'interviewer' : 'interviewee';
+      console.log(`[TWILIO START] Creating token for identity: "${identity}" (isInterviewer: ${isInterviewer})`);
       
       const accessToken = new AccessToken(
         process.env.TWILIO_ACCOUNT_SID,
@@ -338,14 +377,27 @@ function createTwilioEndpoints(app) {
         });
       }
 
-      // Get participant information
-      const participants = await twilioClient.video.v1.rooms(roomInfo.twilioRoomSid)
-        .participants
-        .list();
+      // Get participant information - INCLUDING those who have already disconnected
+      // Fetch ALL participants (both connected and disconnected)
+      const allParticipants = [];
       
-      console.log(`[TWILIO STOP] Found ${participants.length} participants:`);
+      // Get connected participants
+      const connectedParticipants = await twilioClient.video.v1.rooms(roomInfo.twilioRoomSid)
+        .participants
+        .list({ status: 'connected' });
+      allParticipants.push(...connectedParticipants);
+      
+      // Get disconnected participants
+      const disconnectedParticipants = await twilioClient.video.v1.rooms(roomInfo.twilioRoomSid)
+        .participants
+        .list({ status: 'disconnected' });
+      allParticipants.push(...disconnectedParticipants);
+      
+      const participants = allParticipants;
+      
+      console.log(`[TWILIO STOP] Found ${participants.length} total participants:`);
       participants.forEach((p, idx) => {
-        console.log(`[TWILIO STOP]   Participant ${idx + 1}: ${p.identity} (SID: ${p.sid})`);
+        console.log(`[TWILIO STOP]   Participant ${idx + 1}: Identity="${p.identity}" (SID: ${p.sid}, Status: ${p.status || 'unknown'})`);
       });
 
       // Download recordings
@@ -365,10 +417,45 @@ function createTwilioEndpoints(app) {
         console.log(`[TWILIO STOP]   - Duration: ${recording.duration} seconds`);
         console.log(`[TWILIO STOP]   - Size: ${recording.size} bytes`);
         console.log(`[TWILIO STOP]   - Links:`, JSON.stringify(recording.links, null, 2));
+        console.log(`[TWILIO STOP]   - GroupingSids:`, JSON.stringify(recording.groupingSids, null, 2));
         
-        const participant = participants.find(p => 
+        // Debug: Show all participant SIDs
+        console.log(`[TWILIO STOP]   - Available participant SIDs:`);
+        participants.forEach(p => {
+          console.log(`[TWILIO STOP]     • ${p.sid}: ${p.identity}`);
+        });
+        
+        // Try multiple methods to match participant
+        let participant = participants.find(p => 
           recording.groupingSids?.participant_sid === p.sid
         );
+        
+        // If no match, try matching by room_participant_sid
+        if (!participant && recording.groupingSids?.room_participant_sid) {
+          participant = participants.find(p => 
+            recording.groupingSids.room_participant_sid === p.sid
+          );
+          if (participant) {
+            console.log(`[TWILIO STOP]   - Matched using room_participant_sid`);
+          }
+        }
+        
+        if (!participant) {
+          console.log(`[TWILIO STOP]   - WARNING: No participant found for recording`);
+          console.log(`[TWILIO STOP]     Recording participant_sid: ${recording.groupingSids?.participant_sid}`);
+          console.log(`[TWILIO STOP]     Recording room_participant_sid: ${recording.groupingSids?.room_participant_sid}`);
+          
+          // Try to infer from track name if it contains identity info
+          if (recording.trackName?.includes('interviewer')) {
+            console.log(`[TWILIO STOP]   - Inferred identity from track name: interviewer`);
+            participant = { identity: 'interviewer' };
+          } else if (recording.trackName?.includes('interviewee')) {
+            console.log(`[TWILIO STOP]   - Inferred identity from track name: interviewee`);
+            participant = { identity: 'interviewee' };
+          }
+        } else {
+          console.log(`[TWILIO STOP]   - Matched to participant: "${participant.identity}" (SID: ${participant.sid})`);
+        }
 
         const identity = participant?.identity || 'unknown';
         const filename = `${identity}_${recording.trackName || 'track'}_${recording.sid}.${recording.codec || 'mka'}`;

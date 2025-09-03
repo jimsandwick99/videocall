@@ -352,6 +352,16 @@ io.on('connection', (socket) => {
   // Handle recording events
   socket.on('start-recording', (data) => {
     console.log(`[RECORDING] Interviewer ${socket.id} started recording in room ${data.roomId}`);
+    
+    // Get all sockets in the room
+    const roomSockets = io.sockets.adapter.rooms.get(data.roomId);
+    if (roomSockets) {
+      console.log(`[RECORDING] Room ${data.roomId} has ${roomSockets.size} participants:`, Array.from(roomSockets));
+      console.log(`[RECORDING] Emitting start-recording to all except ${socket.id}`);
+    } else {
+      console.log(`[RECORDING] WARNING: Room ${data.roomId} not found or empty!`);
+    }
+    
     // Notify all other users in the room to join Twilio recording
     socket.to(data.roomId).emit('start-recording', {
       roomId: data.roomId

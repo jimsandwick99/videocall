@@ -28,6 +28,7 @@ async function transcribeTwilioRecording(roomId) {
   );
   
   console.log(`📁 Found ${audioFiles.length} audio files to transcribe`);
+  console.log('📁 Files found:', audioFiles);
   
   if (audioFiles.length === 0) {
     console.error('❌ No audio files found');
@@ -92,8 +93,27 @@ async function transcribeTwilioRecording(roomId) {
       console.log(`   ✅ Transcribed successfully`);
       console.log(`   Text preview: "${transcription.text.substring(0, 100)}..."`);
       
-      // Determine speaker from filename
-      const speaker = audioFile.includes('interviewer') ? 'Interviewer' : 'Interviewee';
+      // Determine speaker from filename - be more precise
+      let speaker = 'Unknown';
+      
+      // Check if filename starts with interviewer_ or interviewee_
+      if (audioFile.startsWith('interviewer_') || audioFile.includes('_interviewer_')) {
+        speaker = 'Interviewer';
+      } else if (audioFile.startsWith('interviewee_') || audioFile.includes('_interviewee_')) {
+        speaker = 'Interviewee';
+      } else if (audioFile.includes('interviewer')) {
+        // Fallback: check if interviewer appears anywhere
+        speaker = 'Interviewer';
+      } else if (audioFile.includes('interviewee')) {
+        // Fallback: check if interviewee appears anywhere
+        speaker = 'Interviewee';
+      } else {
+        // Last resort: assume based on file order
+        console.log(`   ⚠️ Could not determine speaker from filename: ${audioFile}`);
+        speaker = audioFiles.indexOf(audioFile) === 0 ? 'Interviewer' : 'Interviewee';
+      }
+      
+      console.log(`   Speaker identified as: ${speaker}`);
       
       transcriptions.push({
         file: audioFile,
@@ -106,9 +126,23 @@ async function transcribeTwilioRecording(roomId) {
       
     } catch (error) {
       console.error(`   ❌ Transcription failed: ${error.message}`);
+      // Use same speaker detection logic for failed transcriptions
+      let speaker = 'Unknown';
+      if (audioFile.startsWith('interviewer_') || audioFile.includes('_interviewer_')) {
+        speaker = 'Interviewer';
+      } else if (audioFile.startsWith('interviewee_') || audioFile.includes('_interviewee_')) {
+        speaker = 'Interviewee';
+      } else if (audioFile.includes('interviewer')) {
+        speaker = 'Interviewer';
+      } else if (audioFile.includes('interviewee')) {
+        speaker = 'Interviewee';
+      } else {
+        speaker = audioFiles.indexOf(audioFile) === 0 ? 'Interviewer' : 'Interviewee';
+      }
+      
       transcriptions.push({
         file: audioFile,
-        speaker: audioFile.includes('interviewer') ? 'Interviewer' : 'Interviewee',
+        speaker: speaker,
         text: '[Transcription failed]',
         error: error.message
       });
@@ -133,6 +167,96 @@ async function transcribeTwilioRecording(roomId) {
     timestamp: new Date().toISOString()
   }, { spaces: 2 });
   
+  // Apply speaker diarization if we have merged segments
+  if (merged && merged.length > 0) {
+    console.log('\n🎯 Applying speaker diarization...');
+    
+    try {
+      const { execSync } = require('child_process');
+      
+      // Check if we have Python and required libraries
+      try {
+        execSync('python3 --version', { stdio: 'ignore' });
+        
+        // Run speaker diarization (use simple version that doesn't require libraries)
+        const diarizationScript = path.join(__dirname, 'speaker-diarization-simple.py');
+        
+        // Find the first audio file to use for diarization (if available)
+        const audioFilePath = audioFiles.length > 0 
+          ? path.join(twilioDir, audioFiles[0]) 
+          : null;
+        
+        const command = audioFilePath 
+          ? `python3 "${diarizationScript}" "${transcriptPath}" "${audioFilePath}"`
+          : `python3 "${diarizationScript}" "${transcriptPath}"`;
+        
+        console.log('   Running diarization script...');
+        execSync(command, { stdio: 'inherit' });
+        
+        // Load the diarized transcript
+        const diarizedPath = transcriptPath.replace('.json', '_diarized.json');
+        if (await fs.pathExists(diarizedPath)) {
+          const diarizedData = await fs.readJson(diarizedPath);
+          
+          // Update the merged segments with diarized data
+          merged = diarizedData.merged || merged;
+          transcriptions = diarizedData.transcriptions || transcriptions;
+          
+          // Save updated transcript
+          await fs.writeJson(transcriptPath, {
+            roomId,
+            twilioRecordings: audioFiles.length,
+            transcriptions,
+            merged,
+            diarization_applied: true,
+            diarization_method: diarizedData.diarization_method || 'simple',
+            timestamp: new Date().toISOString()
+          }, { spaces: 2 });
+          
+          console.log('   ✅ Speaker diarization applied successfully');
+          
+          // Remove the temporary diarized file
+          await fs.remove(diarizedPath);
+        }
+        
+      } catch (pythonError) {
+        console.log('   ⚠️ Python not available, using basic speaker assignment');
+        
+        // Simple fallback: Alternate speakers based on timing
+        let currentSpeaker = 'Interviewer';
+        for (let i = 0; i < merged.length; i++) {
+          // First segment is usually the interviewer
+          if (i === 0) {
+            merged[i].speaker = 'Interviewer';
+          } else {
+            // Check for significant time gap to detect speaker change
+            const gap = merged[i].start - merged[i-1].end;
+            if (gap > 0.5) {
+              // Switch speaker on significant pause
+              currentSpeaker = currentSpeaker === 'Interviewer' ? 'Interviewee' : 'Interviewer';
+            }
+            merged[i].speaker = currentSpeaker;
+          }
+        }
+        
+        // Save with basic diarization
+        await fs.writeJson(transcriptPath, {
+          roomId,
+          twilioRecordings: audioFiles.length,
+          transcriptions,
+          merged,
+          diarization_applied: true,
+          diarization_method: 'simple-fallback',
+          timestamp: new Date().toISOString()
+        }, { spaces: 2 });
+      }
+      
+    } catch (error) {
+      console.error('   ⚠️ Speaker diarization failed:', error.message);
+      // Continue with original transcript
+    }
+  }
+  
   // Generate readable transcript
   const readableTranscript = generateReadableTranscript(merged, transcriptions);
   await fs.writeFile(readablePath, readableTranscript);
@@ -147,8 +271,13 @@ async function transcribeTwilioRecording(roomId) {
 function mergeTwilioTranscripts(transcriptions) {
   const allSegments = [];
   
+  console.log('\n🔀 Processing transcriptions from speakers:');
+  transcriptions.forEach(trans => {
+    console.log(`  - ${trans.speaker}: ${trans.file} (${trans.segments?.length || 0} segments)`);
+  });
+  
   // Since Twilio records separate tracks, we need to merge them
-  // For now, we'll just concatenate them by speaker
+  // Each transcription is from a different speaker
   for (const trans of transcriptions) {
     if (trans.segments && trans.segments.length > 0) {
       trans.segments.forEach(segment => {
@@ -161,8 +290,10 @@ function mergeTwilioTranscripts(transcriptions) {
     }
   }
   
-  // Sort by start time
+  // Sort by start time to create a chronological conversation
   allSegments.sort((a, b) => a.start - b.start);
+  
+  console.log(`🔀 Merged ${allSegments.length} total segments from ${transcriptions.length} speakers`);
   
   return allSegments;
 }

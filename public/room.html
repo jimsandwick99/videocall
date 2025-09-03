@@ -1479,13 +1479,24 @@
         
         // Handle recording notification from interviewer
         socket.on('start-recording', async (data) => {
-            console.log('[CLIENT] Received start-recording notification');
+            console.log('[CLIENT] Received start-recording notification from interviewer');
+            console.log('[CLIENT] My role: ' + (isInterviewer ? 'INTERVIEWER' : 'INTERVIEWEE'));
+            console.log('[CLIENT] Data received:', data);
+            
             if (!isInterviewer) {
-                console.log('[CLIENT] Interviewee joining Twilio recording...');
-                // Show recording indicator for interviewee
-                document.getElementById('recordingIndicator').classList.add('active');
-                // Join Twilio room as interviewee (force flag indicates this is interviewee)
-                await startTwilioRecording(true);
+                console.log('[CLIENT] I am INTERVIEWEE - joining Twilio recording...');
+                try {
+                    // Show recording indicator for interviewee
+                    document.getElementById('recordingIndicator').classList.add('active');
+                    // Join Twilio room as interviewee (force flag indicates this is interviewee)
+                    console.log('[CLIENT] Calling startTwilioRecording(true) for INTERVIEWEE...');
+                    await startTwilioRecording(true);
+                    console.log('[CLIENT] INTERVIEWEE successfully joined Twilio recording');
+                } catch (error) {
+                    console.error('[CLIENT ERROR] INTERVIEWEE failed to join Twilio:', error);
+                }
+            } else {
+                console.log('[CLIENT] I am INTERVIEWER - ignoring notification (I started it)');
             }
         });
         
