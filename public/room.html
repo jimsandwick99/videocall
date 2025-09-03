@@ -1310,8 +1310,15 @@
             // Auto-enable transcription for BOTH participants when connected
             console.log('[AUTO-TRANSCRIPT] Remote participant connected, enabling auto-transcription...');
             console.log('[AUTO-TRANSCRIPT] Current role:', isInterviewer ? 'INTERVIEWER' : 'INTERVIEWEE');
+            
+            // Check if iOS device
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+            if (isIOS) {
+                console.log('[AUTO-TRANSCRIPT] iOS device detected - skipping auto-transcription (not supported)');
+            }
+            
             setTimeout(() => {
-                if (!autoTranscriptionEnabled && isAudioEnabled) {
+                if (!autoTranscriptionEnabled && isAudioEnabled && !isIOS) {
                     console.log('[AUTO-TRANSCRIPT] Starting background transcription for', isInterviewer ? 'INTERVIEWER' : 'INTERVIEWEE');
                     autoTranscriptionEnabled = true;
                     
@@ -2030,13 +2037,23 @@
                 }
                 
                 // Add initial information message
-                addTranscriptEntry('System', '📝 Live transcript is now active', 'system');
+                const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+                if (isIOS) {
+                    addTranscriptEntry('System', '📱 iOS device detected - real-time transcription is not supported', 'system');
+                    addTranscriptEntry('System', '💡 Transcription will be available after the recording ends', 'system');
+                } else {
+                    addTranscriptEntry('System', '📝 Live transcript is now active', 'system');
+                }
+                
                 if (!isInterviewer) {
                     addTranscriptEntry('System', '👤 You are the INTERVIEWEE', 'system');
                 } else {
                     addTranscriptEntry('System', '👔 You are the INTERVIEWER', 'system');
                 }
-                addTranscriptEntry('System', '🎯 Important: Both participants must enable transcription to see each other\'s speech', 'system');
+                
+                if (!isIOS) {
+                    addTranscriptEntry('System', '🎯 Important: Both participants must enable transcription to see each other\'s speech', 'system');
+                }
                 
                 // Notify remote participant that we have transcript open
                 if (socket && socket.connected) {
@@ -2101,9 +2118,21 @@
                 return;
             }
             
+            // Check if browser is iOS (Safari on iOS doesn't support Web Speech API)
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+            if (isIOS) {
+                console.warn('[SPEECH] iOS detected - Speech recognition not supported on iOS devices');
+                console.warn('[SPEECH] User Agent:', navigator.userAgent);
+                transcriptStatus.textContent = 'Not supported on iOS';
+                addTranscriptEntry('System', '📱 Real-time transcription is not supported on iOS devices.', 'system');
+                addTranscriptEntry('System', '💡 Transcription will still be available after the recording ends.', 'system');
+                return;
+            }
+            
             // Check if browser supports speech recognition
             if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-                console.warn('Speech recognition not supported in this browser');
+                console.warn('[SPEECH] Speech recognition not supported in this browser');
+                console.warn('[SPEECH] Browser:', navigator.userAgent);
                 transcriptStatus.textContent = 'Not supported';
                 addTranscriptEntry('System', '⚠️ Speech recognition is not supported in this browser. Try Chrome or Edge.', 'system');
                 addTranscriptEntry('System', '💡 Note: Each participant transcribes their own audio locally', 'system');
